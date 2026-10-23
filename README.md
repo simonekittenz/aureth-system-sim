@@ -38,12 +38,12 @@ Tidal evolution (REBOUNDx), tidal locking timescales, eclipse tracking, precessi
 - The 19 h day is a **solar day** (noon to noon). Sidereal rotation is therefore 18.949 h, and a year is 374 solar days or 375 rotations.
 - Liwaya is the **larger** moon and Nineya the **smaller** (per the world files).
 - Moon configuration **B** is the selected design (hypothetical, not yet canon):
-  - Liwaya: 3,450 km across, about 359,000 km from Bayurinda on average (28 days sidereal, 38.36 Bajurindan days per phase cycle).
-  - Nineya: 1,200 km across, about 149,400 km on average (7.4 days sidereal, 9.65 Bajurindan days per phase cycle).
-  - Orbits are tuned so that **39 Liwaya cycles = 155 Nineya cycles = 4 Bajurindan years**.
+  - Liwaya: 3,450 km across, about 359,500 km from Bayurinda on average (27.6 days sidereal, **38.5 Bajurindan days** per phase cycle).
+  - Nineya: 1,200 km across, about 149,900 km on average (7.5 days sidereal, **9.70 Bajurindan days** per phase cycle).
+  - 32 Liwaya cycles = 127 Nineya cycles = 1,232 days (3.29 years). The calendar is deliberately not tied to the solar year.
   - Both orbits are tilted 1.5 degrees and start at a double full moon with the two moons overlapping.
   - Stable over 3,000 simulated years and across random starting phases.
-  - The orbital planes drift apart and realign about every 66.5 Bajurindan years, so overlaps are frequent for a few
-    years around each realignment and rarer in between.
+  - The orbital planes drift apart and realign every few decades, so overlaps are frequent for a few years around
+    each realignment and rarer in between.
   - Distances in the sidebar are starting (osculating) values; the Overview shows the simulated averages.
 - Aureth is a **G-type** star: about 1.00 solar masses (derived from the 374-day year at 0.87 AU) and solar luminosity.

@@ -59,16 +59,17 @@ def build_calendar(system: System, track: Track, start_kind: str = "full",
 
     L_start = ev[(0, start_kind)]
     N_start = ev[(1, start_kind)]
-    cutoff = end - 0.5 * D
 
     def nearest(kind: str, t: float) -> float:
         arr = ev[(1, kind)]
         return float(arr[np.argmin(np.abs(arr - t))] - t)
 
+    cut_m = end - 0.5 * float(np.median(np.diff(L_start)))     # a cycle holds the starts before half a month from its end
+    cut_w = end - 0.5 * float(np.median(np.diff(N_start)))
     months = []
     for i in range(len(L_start) - 1):
         a, b = L_start[i], L_start[i + 1]
-        if a >= cutoff:
+        if a >= cut_m:
             break
         row = {"month": i + 1, "start_t": float(a), "start_day": _day_number(a, D),
                "length_days": _day_number(b, D) - _day_number(a, D), "exact_days": float((b - a) / D)}
@@ -90,7 +91,7 @@ def build_calendar(system: System, track: Track, start_kind: str = "full",
     month_starts = [m["start_day"] for m in months]
     for i in range(len(N_start) - 1):
         a, b = N_start[i], N_start[i + 1]
-        if a >= cutoff:
+        if a >= cut_w:
             break
         sd = _day_number(a, D)
         mi = max([j for j, s in enumerate(month_starts) if s <= sd], default=None)

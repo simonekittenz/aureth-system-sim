@@ -304,11 +304,7 @@ with tabs[5]:
     tol = c2.slider("Tolerance for a 'double' (Bajurindan days)", 0.1, 2.0, 0.5, step=0.1)
     n_cycles = c3.select_slider("Cycles to show", [1, 2, 3], value=1)
 
-    cycle_years = (repeat / planet.year_days) if repeat else 4.0
-    if abs(cycle_years - round(cycle_years)) < 0.05 and round(cycle_years) >= 1:
-        cycle_days = round(cycle_years) * planet.year_days
-    else:
-        cycle_days = repeat if repeat else 4 * planet.year_days
+    cycle_days = repeat if repeat else 4 * planet.year_days
     span = cycle_days * n_cycles
 
     @st.cache_data(show_spinner="Simulating the calendar span...")

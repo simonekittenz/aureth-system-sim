@@ -36,21 +36,21 @@ planets:
       - name: Liwaya           # the larger moon (canon)
         status: decision
         diameter_km: 3450
-        mean_distance_km: 358700
-        sidereal_days: 27.55
-        phase_cycle_solar_days: 38.36
+        mean_distance_km: 359500
+        sidereal_days: 27.64
+        phase_cycle_solar_days: 38.5
         tilt_deg: 1.5
       - name: Nineya           # the smaller moon (canon)
         status: decision
         diameter_km: 1200
-        mean_distance_km: 149400
-        sidereal_days: 7.45
-        phase_cycle_solar_days: 9.65
+        mean_distance_km: 149900
+        sidereal_days: 7.49
+        phase_cycle_solar_days: 9.70
         tilt_deg: 1.5
     moon_pairing:
       status: decision
-      repeat_solar_days: 1496  # 39 Liwaya cycles = 155 Nineya cycles = 4 years
-      plane_realignment_years: 66.5
+      repeat_solar_days: 1232  # 32 Liwaya cycles = 127 Nineya cycles = 3.29 years; deliberately not tied to the year
+      plane_realignment_years: 66.5   # measured for an earlier tuning; re-measure if needed
   - name: Ashara
     rank: 4
     type: cluster world
