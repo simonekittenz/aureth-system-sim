@@ -22,6 +22,14 @@ streamlit run app.py
 
 A browser tab opens at http://localhost:8501. Keep the Terminal window open while you use the app.
 
+## Two pages
+
+- **Bayurinda moons** (`moons.py`): Liwaya and Nineya, their phases, tides, calendar, eclipses and stability.
+- **Aureth system** (`system.py`): the star with Bayurinda, Ashara and Tarnic: orbits, cycles and alignments, Bayurinda's
+  sky, launch windows between planets, and long-run stability. The other planets join once they have a distance.
+
+`app.py` is only the router between them.
+
 ## Layout
 
 | File | Purpose |
@@ -31,8 +39,11 @@ A browser tab opens at http://localhost:8501. Keep the Terminal window open whil
 | `bajurinda/presets.py` | Candidate moon configurations (hypothetical, not canon) |
 | `bajurinda/dynamics.py` | REBOUND N-body integration, stability runs, random-phase ensembles |
 | `bajurinda/sky.py` | Phases, altitude, equilibrium tides, alignment events |
-| `bajurinda/plots.py` | Plotly figures |
-| `app.py` | The UI |
+| `bajurinda/plots.py` | Plotly figures for the moons page |
+| `bajurinda/aureth.py` | The star and planets: loading `data/aureth.yaml`, orbits, N-body, sky from Bayurinda, alignments |
+| `bajurinda/transfers.py` | Launch windows: Lambert solver, Hohmann baseline, window finder |
+| `bajurinda/system_plots.py` | Plotly figures for the system page |
+| `app.py`, `moons.py`, `system.py` | The UI: router and the two pages |
 
 ## Calendar tab
 

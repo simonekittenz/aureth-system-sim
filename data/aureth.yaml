@@ -18,6 +18,13 @@ star:
     [Fe/H] +0.5 is too dim.
   status: proposal        # mass is pinned by canon; radius and luminosity are free to change
 
+# Where the planets start at the founding moment (mean anomaly, degrees). Placeholder: all three on one ray from the
+# star at perihelion, so at the founding double full moon the star, Bayurinda, Ashara and Tarnic are in a line.
+system_start:
+  status: placeholder
+  phase_deg: {Bayurinda: 0, Ashara: 0, Tarnic: 0}
+  inclination_deg: 0         # placeholder: all orbits flat in one plane
+
 planets:
   - name: Calderic
     rank: 1
@@ -34,6 +41,8 @@ planets:
     type: ocean world
     distance_au: 0.97          # decision: moved out from the original 0.87 so Liwaya can fully cover the Sun
     eccentricity: 0.04
+    diameter_km: 12000
+    gravity_g: 0.9
     axial_tilt_deg: 16
     day_hours: 19              # solar day
     year_solar_days: 440       # decision: was 374 at 0.87 AU
@@ -64,6 +73,8 @@ planets:
     type: cluster world
     distance_au: 1.1
     status: decision           # rank implies it lies between Bayurinda and Tarnic
+    eccentricity: 0.03         # PLACEHOLDER: not settled
+    mass_earth: 0.1            # PLACEHOLDER: not settled (a fractured world; only matters for small perturbations)
     derived:
       year_days: 420.9
       sunlight_earth: 0.72     # derived
@@ -72,6 +83,8 @@ planets:
     type: volcanic world
     distance_au: 1.38
     eccentricity: 0.045
+    diameter_km: 14400
+    gravity_g: 1.08
     axial_tilt_deg: 29
     day_hours: 25
     year_days_of_day_length: 567   # Kepler with the star above gives 567.9 at 1.38 AU (1.3787 AU gives exactly 567)
