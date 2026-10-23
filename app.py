@@ -10,6 +10,7 @@ import streamlit as st
 
 from bajurinda import plots
 from bajurinda.constants import M_EARTH, M_SUN, YEAR_DAYS
+from bajurinda.eclipses import SITE_ANNULAR, SITE_PARTIAL, SITE_TOTAL, eclipse_events, site_eclipse_types, site_rates, summarise
 from bajurinda.eras import era_bands, era_summary, eras_data
 from bajurinda.lunar_calendar import build_calendar
 from bajurinda.dynamics import integrate, mean_rates, phase_ensemble, stability_run
@@ -41,7 +42,7 @@ def load_preset():
 
 def reset_planet():
     st.session_state.update({
-        "p_lum": 1.0, "p_srad": 1.0,
+        "p_lum": CANON.star_luminosity_lsun, "p_srad": CANON.star_radius_rsun,
         "p_radius": CANON.radius_km, "p_mass": CANON.mass_earth, "p_rot": CANON.rotation_hours,
         "p_sid": "solar", "p_a": CANON.a_au, "p_ecc": CANON.ecc, "p_obl": CANON.obliquity_deg,
         "p_star": CANON.star_mass_msun,
@@ -72,8 +73,10 @@ with st.sidebar:
         st.number_input("Axial tilt (deg)", 0.0, 90.0, step=1.0, key="p_obl")
         st.number_input("Stellar mass (solar masses)", 0.2, 3.0, step=0.001, format="%.4f", key="p_star",
                         help="Aureth is G-type. Default is the mass implied by a 374-day, 19-hour year at 0.87 AU.")
-        st.number_input("Stellar luminosity (solar)", 0.01, 5.0, step=0.01, format="%.3f", key="p_lum")
-        st.number_input("Stellar radius (solar)", 0.1, 3.0, step=0.01, format="%.3f", key="p_srad")
+        st.number_input("Stellar luminosity (solar)", 0.01, 5.0, step=0.01, format="%.3f", key="p_lum",
+                        help="A young 1-solar-mass star is about 0.68 to 0.76 (rough).")
+        st.number_input("Stellar radius (solar)", 0.1, 3.0, step=0.01, format="%.3f", key="p_srad",
+                        help="A young 1-solar-mass star is about 0.87 to 0.9. Liwaya can only fully cover the Sun if this is under ~0.9.")
 
     for key, label in zip(MOON_KEYS, ("Liwaya", "Nineya")):
         with st.expander(label, expanded=False):
@@ -135,7 +138,7 @@ rates = get_rates(system)
 report_system = System(planet, tuple(replace(m, a_km=d) for m, d in zip(system.moons, rates["distance"])))
 report = system_report(report_system)
 
-tabs = st.tabs(["Overview", "Orbits", "Phases & sky", "Tides", "Alignments", "Calendar", "Eras", "Stability", "Method & caveats"])
+tabs = st.tabs(["Overview", "Orbits", "Phases & sky", "Tides", "Alignments", "Calendar", "Eras", "Eclipses", "Stability", "Method & caveats"])
 
 # ------------------------------------------------------------------ Overview
 with tabs[0]:
@@ -160,6 +163,7 @@ with tabs[0]:
             ("Implied stellar mass", f"{planet.star_mass_msun:.4f} Msun", "derived"),
             ("Stellar flux", f"{planet.irradiance_earth:.2f} x Earth", "derived from the star's luminosity"),
             ("Sun's apparent size", f"{planet.sun_angular_diameter_deg():.3f}°", "derived"),
+            ("Star surface temperature", f"{planet.star_teff_k:,.0f} K", "derived from luminosity and radius"),
             ("Hill sphere radius", f"{planet.hill_radius_km:,.0f} km", "derived"),
             ("Synchronous orbit (this spin)", f"{planet.synchronous_orbit_km:,.0f} km", "derived"),
             ("Laplace-plane radius (approx.)", f"{planet.laplace_radius_km:,.0f} km", "derived, rough J2"),
@@ -392,8 +396,93 @@ with tabs[6]:
                "surface, Nineya shifts by up to 2.3 degrees depending on where you stand. Double-full and double-new use the "
                "Calendar tab's half-day tolerance. The first era is cut off at year 0 because the founding moment starts aligned.")
 
-# ------------------------------------------------------------------ Stability
+# ------------------------------------------------------------------ Eclipses
 with tabs[7]:
+    st.subheader("Eclipses")
+    st.write("Counts are for the **whole planet**: an eclipse is counted if it is visible from anywhere. Any one spot sees far fewer. "
+             "A *total* solar eclipse needs the moon to look bigger than the Sun; if it looks smaller, the Sun shows as a ring "
+             "(*annular*); *hybrid* is in between. The Sun's size comes from the star radius in the sidebar.")
+    names = tuple(m.name for m in system.moons)
+    ey = st.select_slider("Years to simulate", [10, 20, 40, 100], value=40, key="ecl_years")
+
+    @st.cache_data(show_spinner="Simulating eclipses...")
+    def get_ecl_track(system: System, years: int):
+        return integrate(system, np.arange(0, years * 374 * system.planet.local_day_days + 60, 0.25), elements=False)
+
+    etr = get_ecl_track(system, ey)
+    ev = eclipse_events(system, etr)
+    rows, mets = [], []
+    for nm in names:
+        s_ = summarise([e for e in ev if e["year"] <= ey], nm, "solar", ey)
+        c = s_["counts"]
+        tot = (c["total"] + c["hybrid"]) / ey
+        rows.append({"Moon": nm, "Total or hybrid per year": round(tot, 2), "Annular per year": round(c["annular"] / ey, 2),
+                     "Partial only per year": round(c["partial"] / ey, 2),
+                     "Share of new moons with an eclipse somewhere": f"{s_['share_any']:.0%}",
+                     "Share of central eclipses that are total": f"{s_['share_total_of_central']:.0%}"})
+    st.markdown("**Solar eclipses**")
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    lrows = []
+    for nm in names:
+        s_ = summarise([e for e in ev if e["year"] <= ey], nm, "lunar", ey)
+        c = s_["counts"]
+        lrows.append({"Moon": nm, "Total per year": round(c["total"] / ey, 2), "Partial per year": round(c["partial"] / ey, 2),
+                      "Share of full moons eclipsed": f"{s_['share_any']:.0%}"})
+    st.markdown("**Lunar eclipses** (moon inside the planet's shadow)")
+    st.dataframe(pd.DataFrame(lrows), hide_index=True, width="stretch")
+    st.plotly_chart(plots.eclipse_figure(ev, names, min(ey, 20)), width="stretch")
+    st.caption("Timeline shows the first 20 years. Circles are solar eclipses, diamonds are lunar.")
+
+    st.markdown("**What if the star were a different size?** (orbits, tilts and the Sun's distance unchanged)")
+    wi = []
+    for R in (1.0, 0.95, 0.92, 0.90, 0.88, 0.869, 0.80, 0.75):
+        ev_r = eclipse_events(system, etr, R)
+        row = {"Star radius (solar)": R, "Sun looks (deg)": round(planet.sun_angular_diameter_deg() * R / planet.star_radius_rsun, 3),
+               "Sunlight at Bayurinda": f"{planet.star_luminosity_lsun / planet.a_au**2:.2f}x (at current luminosity)"}
+        for nm in names:
+            s_ = summarise([e for e in ev_r if e["year"] <= ey], nm, "solar", ey)
+            row[f"{nm}: central eclipses that are total"] = f"{s_['share_total_of_central']:.0%}"
+        wi.append(row)
+    st.dataframe(pd.DataFrame(wi), hide_index=True, width="stretch")
+    st.caption("Penumbral lunar eclipses are not counted. The star-size table changes only the Sun's apparent size.")
+
+    st.markdown("**What one place on the planet sees (solar eclipses)**")
+    st.caption("The Sun has to be above the horizon, and the moon's position as seen from the surface is used, which matters most for Nineya.")
+
+    @st.cache_data(show_spinner="Working out what each latitude sees...")
+    def get_site_grid(system: System, years: int):
+        tr = get_ecl_track(system, years)
+        lats = np.arange(-80, 81, 20)
+        lons = np.arange(0, 360, 45)
+        la, lo = np.meshgrid(lats, lons, indexing="ij")
+        ev_, ty_ = site_eclipse_types(system, tr, la.ravel(), lo.ravel())
+        return lats, lons, ev_, ty_
+
+    g_lats, g_lons, g_ev, g_ty = get_site_grid(system, ey)
+    r0, r1 = site_rates(g_ev, g_ty, 0, ey), site_rates(g_ev, g_ty, 1, ey)
+    prof = []
+    for i, la in enumerate(g_lats):
+        sl = slice(i * len(g_lons), (i + 1) * len(g_lons))
+        tot = r0["total"][sl].mean() + r0["annular"][sl].mean()
+        prof.append({"Latitude": int(la),
+                     f"{names[0]}: eclipses seen per year": round(float(r0["any"][sl].mean()), 2),
+                     f"{names[0]}: a total or ring eclipse about every (years)": (f"{1 / tot:,.0f}" if tot > 0.0005 else "rarely"),
+                     f"{names[1]}: eclipses seen per year": round(float(r1["any"][sl].mean()), 2)})
+    st.dataframe(pd.DataFrame(prof), hide_index=True, width="stretch")
+    st.caption("Averaged over longitude. Totality paths are narrow (about 100 km), so a total eclipse at any one spot is a once-in-decades event, "
+               "while partial eclipses are common. The counts are rough for the rarest cases.")
+
+    s_ev, s_ty = site_eclipse_types(system, etr, [lat], [lon])
+    TYPE = {SITE_PARTIAL: "partial", SITE_ANNULAR: "ring (annular)", SITE_TOTAL: "total"}
+    seen = [(e, int(s_ty[i, 0])) for i, e in enumerate(s_ev) if s_ty[i, 0] > 0]
+    seen.sort(key=lambda x: x[0][1])
+    st.markdown(f"**At latitude {lat}, longitude {lon}** (sidebar): {len(seen)} solar eclipses in {ey} years")
+    if seen:
+        st.dataframe(pd.DataFrame([{"Year": round(e[1] / planet.local_day_days / 374, 2), "Moon": names[e[0]], "Type": TYPE[t_]}
+                                   for e, t_ in seen[:40]]), hide_index=True, width="stretch", height=300)
+
+# ------------------------------------------------------------------ Stability
+with tabs[8]:
     st.subheader("Orbital stability")
     st.write("N-body integration of star + planet + both moons. A single run is not conclusive: this system "
              "can be stable for some starting phases and not others. Use the phase ensemble before trusting a configuration.")
@@ -438,7 +527,7 @@ with tabs[7]:
             st.caption("Losses at (years): " + ", ".join(f"{y:.0f}" for y in lost))
 
 # ------------------------------------------------------------------ Method
-with tabs[8]:
+with tabs[9]:
     st.markdown("""
 **Status labels** used throughout: *canon* (your established worldbuilding), *derived* (calculated from canon),
 *hypothetical* (a design choice, such as anything about the moons), and *validated* (checked by simulation, within the stated limits).

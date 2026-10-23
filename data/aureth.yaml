@@ -7,10 +7,12 @@
 
 star:
   name: Aureth
-  type: G-type            # decision: world file still says K-type (orange dwarf)
-  mass_msun: 1.0021       # derived: implied by Bayurinda's 374 solar days of 19 h at 0.87 AU
-  luminosity_lsun: 1.0    # assumed solar
-  radius_rsun: 1.0        # assumed solar
+  type: G-type            # decision: world file still says K-type (orange dwarf) in some copies; now G-type
+  mass_msun: 1.0021       # derived: implied by Bayurinda's 374 solar days of 19 h at 0.87 AU (Tarnic's canon gives 1.0051)
+  luminosity_lsun: 0.72   # proposal: a young Sun-mass star; makes Bayurinda's sunlight about 0.95x Earth
+  radius_rsun: 0.88       # proposal: small enough that Liwaya can fully cover the Sun (needs < ~0.90)
+  teff_k: 5668            # derived from luminosity and radius
+  status: proposal        # mass is pinned by canon; radius and luminosity are free to change
 
 planets:
   - name: Calderic
@@ -31,6 +33,7 @@ planets:
     axial_tilt_deg: 16
     day_hours: 19              # solar day
     year_solar_days: 374
+    sunlight_earth: 0.95           # derived, at luminosity 0.72
     status: canon
     moons:                     # Design B: author's chosen design, hypothetical, not yet in the world files
       - name: Liwaya           # the larger moon (canon)
@@ -58,7 +61,7 @@ planets:
     status: decision           # rank implies it lies between Bayurinda and Tarnic
     derived:
       year_days: 420.9
-      sunlight_earth: 0.83
+      sunlight_earth: 0.60     # at luminosity 0.72
   - name: Tarnic
     rank: 5
     type: volcanic world
@@ -66,7 +69,8 @@ planets:
     eccentricity: 0.045
     axial_tilt_deg: 29
     day_hours: 25
-    year_days_of_day_length: 567
+    year_days_of_day_length: 567   # Kepler with the star above gives 567.9 at 1.38 AU (1.3787 AU gives exactly 567)
+    sunlight_earth: 0.38           # derived, at luminosity 0.72
     status: canon
     moons: [Scornia]
   - name: Oric

@@ -44,9 +44,14 @@ runs of double-full and double-new moons marked. Month and week names and struct
 A long-run timeline (70-300 years) of how often the two moons overlap, the angle between their orbital planes,
 and where the double-full and double-new months fall. Gold bands mark the stretches when the planes are aligned.
 
+## Eclipses tab
+
+Solar and lunar eclipses for both moons, counted for the whole planet and for a single place, plus a table of what
+different star sizes would do to totality.
+
 ## Not yet implemented
 
-Tidal evolution (REBOUNDx), tidal locking timescales, eclipse tracking, precession.
+Tidal evolution (REBOUNDx), tidal locking timescales, precession.
 
 ## Design decisions
 
@@ -61,4 +66,6 @@ Tidal evolution (REBOUNDx), tidal locking timescales, eclipse tracking, precessi
   - The orbital planes drift apart and realign every 66.4 Bajurindan years, so overlaps are frequent for a few years around
     each realignment and rarer in between.
   - Distances in the sidebar are starting (osculating) values; the Overview shows the simulated averages.
-- Aureth is a **G-type** star: about 1.00 solar masses (derived from the 374-day year at 0.87 AU) and solar luminosity.
+- Aureth is a **G-type** star: 1.0021 solar masses (derived from the 374-day year at 0.87 AU). Its radius (0.88 solar) and
+  luminosity (0.72 solar) are a proposal for a young star: sunlight at Bayurinda is 0.95x Earth, and the Sun looks small
+  enough (0.539 degrees) that Liwaya (0.55 degrees) can fully cover it for total solar eclipses.

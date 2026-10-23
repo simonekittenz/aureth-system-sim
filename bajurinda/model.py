@@ -117,6 +117,10 @@ class Planet:
         return r5 ** 0.2
 
     @property
+    def star_teff_k(self) -> float:
+        return 5772 * (self.star_luminosity_lsun / self.star_radius_rsun**2) ** 0.25
+
+    @property
     def star_radius_km(self) -> float:
         return self.star_radius_rsun * R_SUN_KM
 
@@ -125,8 +129,10 @@ class Planet:
 
 
 def canon_planet(year_local_days: float = 374.0, day_hours: float = 19.0) -> Planet:
-    """Planet with the canon values. Star mass is derived from the canon year."""
-    p = Planet(rotation_hours=day_hours, rotation_is_sidereal=False)
+    """Planet with the canon values. Star mass is derived from the canon year. The star's radius and
+    luminosity are a proposal: a young Sun-mass star (0.88 solar radii, 0.72 solar luminosities)."""
+    p = Planet(rotation_hours=day_hours, rotation_is_sidereal=False,
+               star_luminosity_lsun=0.72, star_radius_rsun=0.88)
     year_s = year_local_days * day_hours * 3600
     total = 4 * math.pi**2 * (p.a_km * KM) ** 3 / (G * year_s**2)
     return replace(p, star_mass_kg=total - p.mass_kg)

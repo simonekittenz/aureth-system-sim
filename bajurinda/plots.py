@@ -231,3 +231,25 @@ def eras_figure(data: ErasData, bands: list[tuple[float, float]], threshold_deg:
     fig.update_xaxes(title_text="Bajurindan years", range=[0, data.years], row=3, col=1)
     fig.update_layout(height=700, margin=dict(l=10, r=10, t=40, b=10), showlegend=False)
     return fig
+
+
+ECLIPSE_COL = {"total": "#ffb703", "hybrid": "#fb8500", "annular": "#8ecae6", "partial": "#adb5bd"}
+
+
+def eclipse_figure(events: list[dict], names: tuple[str, str], years: float) -> go.Figure:
+    fig = go.Figure()
+    rows = [(names[0], "solar"), (names[1], "solar"), (names[0], "lunar"), (names[1], "lunar")]
+    labels = [f"{m} {k}" for m, k in rows]
+    for typ, colour in ECLIPSE_COL.items():
+        for kind, symbol in (("solar", "circle"), ("lunar", "diamond")):
+            pts = [(e["year"], labels.index(f"{e['moon']} {kind}")) for e in events
+                   if e["type"] == typ and e["kind"] == kind and e["year"] <= years]
+            if not pts:
+                continue
+            fig.add_trace(go.Scatter(x=[a for a, _ in pts], y=[b for _, b in pts], mode="markers",
+                                     name=f"{kind} {typ}", marker=dict(size=7, color=colour, symbol=symbol),
+                                     hovertemplate=f"{kind} {typ}<br>year %{{x:.2f}}<extra></extra>"))
+    fig.update_layout(height=320, margin=dict(l=10, r=10, t=10, b=10), legend=dict(orientation="h", y=1.2),
+                      xaxis=dict(title="Bajurindan years", range=[0, years]),
+                      yaxis=dict(tickmode="array", tickvals=list(range(4)), ticktext=labels, autorange="reversed"))
+    return fig
