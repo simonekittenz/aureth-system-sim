@@ -13,10 +13,12 @@ PRESETS: dict[str, tuple[str, Moon, Moon]] = {
         Moon("Nineya", 2100, 3.3, 240_000, 0.01, 1.5, 0, 40, 10),
     ),
     "B. Large outer, small inner (selected design)": (
-        "Period ratio ~3.7. Liwaya is the large outer moon and dominant tide-raiser; "
-        "Nineya is a small close moon. Most robust against solar perturbation.",
-        Moon("Liwaya", 3450, 3.3, 360_000, 0.01, 3.0, 120, 200, 80),
-        Moon("Nineya", 1200, 3.3, 150_000, 0.01, 1.5, 0, 40, 10),
+        "Liwaya is the large outer moon and dominant tide-raiser; Nineya is a small close moon. "
+        "Orbits are tuned so that 39 Liwaya months = 155 Nineya cycles = 4 Bayurindan years, and the "
+        "start moment is a double full moon with the two moons overlapping. Tilts are 1.5 degrees. "
+        "Listed distances are the starting osculating values (the average Liwaya distance is slightly smaller).",
+        Moon("Liwaya", 3450, 3.3, 364_462, 0.01, 1.5, 0, 0, 0),
+        Moon("Nineya", 1200, 3.3, 150_047, 0.01, 1.5, 0, 0, 0),
     ),
     "C. 2:1 resonant pair": (
         "Period ratio 2.00. Liwaya orbits exactly twice as slowly as Nineya, so "

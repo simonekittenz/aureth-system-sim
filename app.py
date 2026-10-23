@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import warnings
+from dataclasses import replace
 
 import numpy as np
 import pandas as pd
@@ -9,13 +10,13 @@ import streamlit as st
 
 from bajurinda import plots
 from bajurinda.constants import M_EARTH, M_SUN, YEAR_DAYS
-from bajurinda.dynamics import integrate, phase_ensemble, stability_run
+from bajurinda.dynamics import integrate, mean_rates, phase_ensemble, stability_run
 from bajurinda.model import (
     Moon, Planet, System, canon_planet, moon_report, planet_warnings, system_report,
 )
 from bajurinda.presets import DEFAULT_PRESET, PRESETS
 from bajurinda.sky import (
-    alignment_events, altitude_deg, crossings, pattern_periods, tide_series,
+    alignment_events, altitude_deg, crossings, tide_series,
 )
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -76,7 +77,8 @@ with st.sidebar:
         with st.expander(label, expanded=False):
             st.number_input("Diameter (km)", 200.0, 8000.0, step=50.0, key=f"{key}_dia")
             st.number_input("Density (g/cm³)", 1.0, 6.0, step=0.1, key=f"{key}_rho")
-            st.slider("Semi-major axis (km)", 30_000, 700_000, step=1_000, key=f"{key}_a")
+            st.number_input("Starting semi-major axis (km)", 30_000, 700_000, step=100, key=f"{key}_a",
+                            help="Osculating value at the start. The simulated average distance differs by about 1%; see the Overview.")
             st.slider("Eccentricity", 0.0, 0.3, step=0.005, key=f"{key}_e")
             st.slider("Inclination to the ecliptic (deg)", 0.0, 30.0, step=0.1, key=f"{key}_inc")
             st.slider("Starting orbital phase (deg)", 0.0, 360.0, step=1.0, key=f"{key}_M")
@@ -108,7 +110,6 @@ def build_system() -> System:
 
 system = build_system()
 planet = system.planet
-report = system_report(system)
 unit_days = planet.local_day_days if unit == "Bajurindan days" else 1.0
 unit_label = "Bajurindan (solar) days" if unit == "Bajurindan days" else "Earth days"
 
@@ -122,12 +123,22 @@ def get_track(system: System, window_days: int, step_hours: int):
 
 track = get_track(system, window, step_h)
 
+
+@st.cache_data(show_spinner="Measuring mean orbital periods...")
+def get_rates(system: System):
+    return mean_rates(system)
+
+
+rates = get_rates(system)
+report_system = System(planet, tuple(replace(m, a_km=d) for m, d in zip(system.moons, rates["distance"])))
+report = system_report(report_system)
+
 tabs = st.tabs(["Overview", "Orbits", "Phases & sky", "Tides", "Alignments", "Stability", "Method & caveats"])
 
 # ------------------------------------------------------------------ Overview
 with tabs[0]:
     st.header("Bajurinda: two-moon system")
-    for sev, msg in planet_warnings(system):
+    for sev, msg in planet_warnings(report_system):
         {"error": st.error, "warning": st.warning, "info": st.info}[sev](msg)
 
     c1, c2 = st.columns([1.1, 1])
@@ -154,17 +165,21 @@ with tabs[0]:
         st.dataframe(pd.DataFrame(rows, columns=["Property", "Value", "Origin"]), hide_index=True, width="stretch")
     with c2:
         st.subheader("Moons")
-        a, b = (report["moons"][m.name] for m in system.moons)
+        a, b = (dict(report["moons"][m.name]) for m in system.moons)
+        ld = planet.local_day_days
+        for r, k in ((a, 0), (b, 1)):
+            r.update(sidereal_days=rates["sidereal"][k], sidereal_local_days=rates["sidereal"][k] / ld,
+                     synodic_days=rates["synodic"][k], synodic_local_days=rates["synodic"][k] / ld)
         spec = [
             ("Mass (Earth's Moon = 1)", "mass_luna", "{:.3f}"),
-            ("Semi-major axis (km)", "a_km", "{:,.0f}"),
+            ("Mean distance, simulated (km)", "a_km", "{:,.0f}"),
             ("Distance (planet radii)", "a_planet_radii", "{:.1f}"),
             ("Distance / planet Hill radius", "a_hill_frac", "{:.3f}"),
             ("Use of single-moon stability limit", "stability_fraction", "{:.0%}"),
-            ("Sidereal period (Earth days)", "sidereal_days", "{:.3f}"),
-            ("Sidereal period (local days)", "sidereal_local_days", "{:.2f}"),
-            ("Synodic / phase period (Earth days)", "synodic_days", "{:.3f}"),
-            ("Synodic / phase period (local days)", "synodic_local_days", "{:.2f}"),
+            ("Sidereal period, simulated mean (Earth days)", "sidereal_days", "{:.3f}"),
+            ("Sidereal period, simulated mean (local days)", "sidereal_local_days", "{:.2f}"),
+            ("Synodic / phase period, simulated mean (Earth days)", "synodic_days", "{:.3f}"),
+            ("Synodic / phase period, simulated mean (local days)", "synodic_local_days", "{:.2f}"),
             ("Apparent diameter, mean (deg)", "ang_diam_mean_deg", "{:.3f}"),
             ("Apparent diameter, closest (deg)", "ang_diam_peri_deg", "{:.3f}"),
             ("Apparent diameter, farthest (deg)", "ang_diam_apo_deg", "{:.3f}"),
@@ -180,18 +195,30 @@ with tabs[0]:
             columns=["", system.moons[0].name, system.moons[1].name]), hide_index=True, width="stretch", height=670)
 
     st.subheader("Recurring patterns")
-    pp = pattern_periods(system)
+    S, P = rates["synodic"], rates["sidereal"]
+    names = [m.name for m in system.moons]
+    lineup = 1 / abs(1 / P[0] - 1 / P[1])
     pr = [
-        ("Liwaya phase cycle (synodic)", pp["liwaya_synodic"]),
-        ("Nineya phase cycle (synodic)", pp["nineya_synodic"]),
-        ("Liwaya and Nineya line up again (also the phase-beat)", pp["moon_moon_conjunction"]),
-        ("Liwaya-Sun spring tide recurrence", pp["liwaya_spring_neap"]),
-        ("Nineya-Sun spring tide recurrence", pp["nineya_spring_neap"]),
-        ("Moon-moon tidal reinforcement recurrence", pp["moon_moon_tidal_alignment"]),
+        (f"{names[0]} phase cycle (synodic)", S[0]),
+        (f"{names[1]} phase cycle (synodic)", S[1]),
+        (f"{names[0]} and {names[1]} line up again (also the phase-beat)", lineup),
+        (f"{names[0]}-Sun spring tide recurrence", S[0] / 2),
+        (f"{names[1]}-Sun spring tide recurrence", S[1] / 2),
+        ("Moon-moon tidal reinforcement recurrence", lineup / 2),
     ]
+    longi = int(np.argmax(S)); shorti = 1 - longi
+    q = round(S[longi] / S[shorti])
+    repeat = None
+    if q >= 2 and abs(S[longi] / S[shorti] - q) < 0.25:
+        repeat = 1 / abs(1 / S[shorti] - q / S[longi])
+        pr.append(("Both phase patterns repeat together", repeat))
     st.dataframe(pd.DataFrame(
         [(n, f"{v:.2f}", f"{v / planet.local_day_days:.2f}") for n, v in pr],
         columns=["Cycle", "Earth days", "Bajurindan days"]), hide_index=True, width="stretch")
+    if repeat:
+        st.caption(f"Phase repeat: {repeat / S[longi]:.1f} {names[longi]} cycles = {repeat / S[shorti]:.1f} {names[shorti]} cycles "
+                   f"= {repeat / planet.year_days:.2f} Bayurindan years. All periods here are measured from the simulation "
+                   "(they include the Sun's perturbation), so they differ slightly from a plain Kepler calculation.")
     c3, c4, c5 = st.columns(3)
     c3.metric(f"Period ratio ({report['outer']} / {report['inner']})", f"{report['period_ratio']:.3f}")
     c4.metric("Spacing (mutual Hill radii)", f"{report['mutual_hill_sep']:.1f}", help="Below ~3.5 is unstable for circular coplanar orbits.")

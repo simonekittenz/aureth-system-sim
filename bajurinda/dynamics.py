@@ -87,6 +87,21 @@ def integrate(system: System, times_days: np.ndarray, megno: bool = False,
     return Track(np.asarray(times_days, float)[sl], moon_pos[sl], star_pos[sl], a[sl], e[sl], inc[sl], meg)
 
 
+def mean_rates(system: System, days: float = 4000.0, step: float = 1.0) -> dict:
+    """Mean sidereal and synodic periods (Earth days) and mean distance (km) of each moon, measured
+    from a linear fit to the simulated longitudes. These include the Sun's perturbation, unlike Kepler's law."""
+    t = np.arange(0.0, days, step)
+    tr = integrate(system, t)
+    star_lon = np.unwrap(np.arctan2(tr.star_pos[:, 1], tr.star_pos[:, 0]))
+    out = {"sidereal": [], "synodic": [], "distance": []}
+    for k in range(2):
+        lon = np.unwrap(np.arctan2(tr.moon_pos[:, k, 1], tr.moon_pos[:, k, 0]))
+        out["sidereal"].append(2 * math.pi / np.polyfit(t, lon, 1)[0])
+        out["synodic"].append(2 * math.pi / np.polyfit(t, lon - star_lon, 1)[0])
+        out["distance"].append(float(np.linalg.norm(tr.moon_pos[:, k], axis=1).mean()))
+    return out
+
+
 @dataclass
 class StabilityResult:
     track: Track
