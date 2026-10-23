@@ -43,7 +43,7 @@ Tidal evolution (REBOUNDx), tidal locking timescales, eclipse tracking, precessi
   - 32 Liwaya cycles = 127 Nineya cycles = 1,232 days (3.29 years). The calendar is deliberately not tied to the solar year.
   - Both orbits are tilted 1.5 degrees and start at a double full moon with the two moons overlapping.
   - Stable over 3,000 simulated years and across random starting phases.
-  - The orbital planes drift apart and realign every few decades, so overlaps are frequent for a few years around
+  - The orbital planes drift apart and realign every 66.4 Bajurindan years, so overlaps are frequent for a few years around
     each realignment and rarer in between.
   - Distances in the sidebar are starting (osculating) values; the Overview shows the simulated averages.
 - Aureth is a **G-type** star: about 1.00 solar masses (derived from the 374-day year at 0.87 AU) and solar luminosity.

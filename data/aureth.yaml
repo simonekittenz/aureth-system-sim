@@ -50,7 +50,7 @@ planets:
     moon_pairing:
       status: decision
       repeat_solar_days: 1232  # 32 Liwaya cycles = 127 Nineya cycles = 3.29 years; deliberately not tied to the year
-      plane_realignment_years: 66.5   # measured for an earlier tuning; re-measure if needed
+      plane_realignment_years: 66.4   # measured for the current tuning (minima at years 66.4, 132.9, 199.3, 265.7)
   - name: Ashara
     rank: 4
     type: cluster world
