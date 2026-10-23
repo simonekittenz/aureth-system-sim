@@ -4,13 +4,23 @@ Interactive Streamlit app for designing Liwaya and Nineya, the moons of Bajurind
 
 ## Run
 
+Shortcut (set up in `~/.zshrc`; open a new Terminal window first):
+
+```bash
+bajurinda            # start, or restart if already running
+bajurinda stop
+bajurinda status
+```
+
+Without the shortcut:
+
 ```bash
 cd ~/Projects/Creative/planet-sims
 source .venv/bin/activate
 streamlit run app.py
 ```
 
-A browser tab opens at http://localhost:8501.
+A browser tab opens at http://localhost:8501. Keep the Terminal window open while you use the app.
 
 ## Layout
 
