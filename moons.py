@@ -55,6 +55,15 @@ if "preset" not in st.session_state:
 
 ss = st.session_state
 
+# Streamlit forgets the settings of widgets that are not on screen, so leaving this page and coming back would reset
+# every box in the sidebar to its minimum. Keep a copy of the settings and put them back before the widgets are drawn.
+for _k, _v in ss.get("_moons_saved", {}).items():
+    if _k not in ss:
+        ss[_k] = _v
+for _k, _v in {"v_window": 240, "v_step": 3, "v_lat": 10, "v_lon": 0, "v_unit": "Earth days"}.items():
+    if _k not in ss:
+        ss[_k] = _v
+
 with st.sidebar:
     st.title("Bajurinda")
     st.caption(PRESETS[DEFAULT_PRESET][0])
@@ -90,11 +99,13 @@ with st.sidebar:
             st.slider("Argument of periapsis (deg)", 0.0, 360.0, step=1.0, key=f"{key}_w")
 
     st.subheader("View")
-    window = st.slider("Simulated span (Earth days)", 30, 1500, 240, step=10)
-    step_h = st.select_slider("Sampling step (hours)", [1, 2, 3, 4, 6, 12], value=3)
-    lat = st.slider("Observer latitude (deg)", -90, 90, 10)
-    lon = st.slider("Observer longitude (deg)", -180, 180, 0)
-    unit = st.radio("Time unit for plots", ["Earth days", "Bajurindan days"], horizontal=True)
+    window = st.slider("Simulated span (Earth days)", 30, 1500, step=10, key="v_window")
+    step_h = st.select_slider("Sampling step (hours)", [1, 2, 3, 4, 6, 12], key="v_step")
+    lat = st.slider("Observer latitude (deg)", -90, 90, key="v_lat")
+    lon = st.slider("Observer longitude (deg)", -180, 180, key="v_lon")
+    unit = st.radio("Time unit for plots", ["Earth days", "Bajurindan days"], horizontal=True, key="v_unit")
+
+ss["_moons_saved"] = {k: v for k, v in ss.items() if k.startswith(("p_", "L_", "N_", "v_"))}
 
 
 def build_system() -> System:
@@ -212,8 +223,8 @@ with tabs[0]:
         ("Moon-moon tidal reinforcement recurrence", lineup / 2),
     ]
     longi = int(np.argmax(S)); shorti = 1 - longi
-    q = round(S[longi] / S[shorti])
     repeat = None
+    q = round(S[longi] / S[shorti]) if np.all(np.isfinite(S)) and S[shorti] > 0 else 0
     if q >= 2 and abs(S[longi] / S[shorti] - q) < 0.25:
         repeat = 1 / abs(1 / S[shorti] - q / S[longi])
         pr.append(("Both phase patterns repeat together", repeat))

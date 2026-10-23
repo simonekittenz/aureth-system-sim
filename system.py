@@ -37,9 +37,12 @@ def reset_system():
                                  f"sys_{b.name}_m": float(b.mass_earth), f"sys_{b.name}_ph": float(b.phase_deg)})
 
 
-if "sys_Bayurinda_a" not in st.session_state:
-    reset_system()
 ss = st.session_state
+for _k, _v in ss.get("_sys_saved", {}).items():      # see moons.py: Streamlit drops widget values when another page is shown
+    if _k not in ss:
+        ss[_k] = _v
+if "sys_Bayurinda_a" not in ss:
+    reset_system()
 
 with st.sidebar:
     st.subheader("Aureth system")
@@ -54,6 +57,8 @@ with st.sidebar:
                       help="0 puts the planet at its closest point to Aureth on the shared starting line.")
             if b.placeholder_note:
                 st.caption(f"Not settled: {b.placeholder_note}.")
+
+ss["_sys_saved"] = {k: v for k, v in ss.items() if k.startswith("sys_") and k not in ("sys_stab", "sys_reset")}
 
 STAR = STAR0
 BODIES = [replace(b, a_au=ss[f"sys_{b.name}_a"], ecc=ss[f"sys_{b.name}_e"], mass_earth=ss[f"sys_{b.name}_m"],
