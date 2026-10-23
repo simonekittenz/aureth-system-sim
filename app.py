@@ -10,6 +10,7 @@ import streamlit as st
 
 from bajurinda import plots
 from bajurinda.constants import M_EARTH, M_SUN, YEAR_DAYS
+from bajurinda.eras import era_bands, era_summary, eras_data
 from bajurinda.lunar_calendar import build_calendar
 from bajurinda.dynamics import integrate, mean_rates, phase_ensemble, stability_run
 from bajurinda.model import (
@@ -134,7 +135,7 @@ rates = get_rates(system)
 report_system = System(planet, tuple(replace(m, a_km=d) for m, d in zip(system.moons, rates["distance"])))
 report = system_report(report_system)
 
-tabs = st.tabs(["Overview", "Orbits", "Phases & sky", "Tides", "Alignments", "Calendar", "Stability", "Method & caveats"])
+tabs = st.tabs(["Overview", "Orbits", "Phases & sky", "Tides", "Alignments", "Calendar", "Eras", "Stability", "Method & caveats"])
 
 # ------------------------------------------------------------------ Overview
 with tabs[0]:
@@ -352,8 +353,47 @@ with tabs[5]:
     st.caption("Real lunar months wander by a few tenths of a day around these averages, so a calendar that counts days "
                "will drift slightly from the moon. Nineya's cycle is steadier than Liwaya's.")
 
-# ------------------------------------------------------------------ Stability
+# ------------------------------------------------------------------ Eras
 with tabs[6]:
+    st.subheader("Eras of overlap")
+    st.write("Liwaya pulls Nineya's orbit around, so the two orbital planes drift apart and come back together on a long cycle. "
+             "When the planes line up, the moons overlap often; when they are tilted away from each other, rarely. "
+             "Gold bands mark the stretches when the planes are within the chosen angle of each other.")
+    e1, e2 = st.columns(2)
+    e_years = e1.select_slider("Years to simulate", [70, 140, 200, 300], value=140)
+    e_thr = e2.slider("Count the planes as aligned within (degrees)", 0.5, 5.0, 2.0, step=0.5)
+
+    @st.cache_data(show_spinner="Simulating the eras...")
+    def get_eras(system: System, years: int):
+        return eras_data(system, years)
+
+    ed = get_eras(system, e_years)
+    bands = era_bands(ed, e_thr)
+    es = era_summary(ed, bands)
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Overlaps per year, average", f"{es['per_year']:.1f}", f"{es['overlaps']} in {e_years} years", delta_color="off")
+    m2.metric("Time between eras", f"{es['spacing']:.1f} years" if es["spacing"] else "n/a", f"{es['n_eras']} eras shown", delta_color="off")
+    m3.metric("Overlaps inside eras", f"{es['share_in_era']:.0%}", f"eras cover {es['era_share_of_time']:.0%} of the time", delta_color="off")
+    m4.metric("Double runs starting inside an era", f"{es['runs_in_era']} of {es['runs']}", "unrelated rhythms if close to the time share", delta_color="off")
+    st.plotly_chart(plots.eras_figure(ed, bands, e_thr), width="stretch")
+
+    if bands:
+        mut = np.nan_to_num(ed.mutual_deg, nan=99.0)
+        rows = []
+        for i, (a0, b0) in enumerate(bands, 1):
+            sel = (ed.plane_years >= a0) & (ed.plane_years <= b0)
+            n_in = int(((ed.overlap_years >= a0) & (ed.overlap_years <= b0)).sum())
+            rows.append({"Era": i, "From year": round(a0, 1), "To year": round(b0, 1), "Length (years)": round(b0 - a0, 1),
+                         "Closest alignment (year)": round(float(ed.plane_years[sel][np.argmin(mut[sel])]), 1),
+                         "Smallest plane angle (deg)": round(float(mut[sel].min()), 2), "Overlaps": n_in,
+                         "Overlaps per year": round(n_in / max(b0 - a0, 0.01), 1)})
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    st.caption("Overlap = the two moons' discs touch or cover each other as seen from the planet's centre; seen from the "
+               "surface, Nineya shifts by up to 2.3 degrees depending on where you stand. Double-full and double-new use the "
+               "Calendar tab's half-day tolerance. The first era is cut off at year 0 because the founding moment starts aligned.")
+
+# ------------------------------------------------------------------ Stability
+with tabs[7]:
     st.subheader("Orbital stability")
     st.write("N-body integration of star + planet + both moons. A single run is not conclusive: this system "
              "can be stable for some starting phases and not others. Use the phase ensemble before trusting a configuration.")
@@ -398,7 +438,7 @@ with tabs[6]:
             st.caption("Losses at (years): " + ", ".join(f"{y:.0f}" for y in lost))
 
 # ------------------------------------------------------------------ Method
-with tabs[7]:
+with tabs[8]:
     st.markdown("""
 **Status labels** used throughout: *canon* (your established worldbuilding), *derived* (calculated from canon),
 *hypothetical* (a design choice, such as anything about the moons), and *validated* (checked by simulation, within the stated limits).

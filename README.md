@@ -29,6 +29,11 @@ A browser tab opens at http://localhost:8501.
 Lists every month (Liwaya's phase cycle) and week (Nineya's phase cycle) across the repeating cycle, with
 runs of double-full and double-new moons marked. Month and week names and structure are placeholders.
 
+## Eras tab
+
+A long-run timeline (70-300 years) of how often the two moons overlap, the angle between their orbital planes,
+and where the double-full and double-new months fall. Gold bands mark the stretches when the planes are aligned.
+
 ## Not yet implemented
 
 Tidal evolution (REBOUNDx), tidal locking timescales, eclipse tracking, precession.

@@ -57,7 +57,7 @@ def _lost_flags(system: System, moon_pos: np.ndarray, e: np.ndarray) -> np.ndarr
 
 
 def integrate(system: System, times_days: np.ndarray, megno: bool = False,
-              stop_when_lost: bool = False) -> Track:
+              stop_when_lost: bool = False, elements: bool = True) -> Track:
     sim = build_simulation(system, megno=megno)
     n = len(times_days)
     moon_pos = np.zeros((n, 2, 3))
@@ -77,8 +77,9 @@ def integrate(system: System, times_days: np.ndarray, megno: bool = False,
             for k in range(2):
                 m = ps[2 + k]
                 moon_pos[i, k] = np.array([m.x, m.y, m.z]) - pp
-                o = m.orbit(primary=planet)
-                a[i, k], e[i, k], inc[i, k] = o.a, o.e, math.degrees(o.inc)
+                if elements:
+                    o = m.orbit(primary=planet)
+                    a[i, k], e[i, k], inc[i, k] = o.a, o.e, math.degrees(o.inc)
             if stop_when_lost and _lost_flags(system, moon_pos[i:i + 1], e[i:i + 1]).any():
                 last = i + 1
                 break
