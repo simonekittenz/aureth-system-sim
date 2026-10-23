@@ -31,7 +31,9 @@ Tidal evolution (REBOUNDx), tidal locking timescales, eclipses, precession.
 ## Design decisions
 
 - The 19 h day is a **solar day** (noon to noon). Sidereal rotation is therefore 18.949 h, and a year is 374 solar days or 375 rotations.
+- Liwaya is the **larger** moon and Nineya the **smaller** (per the world files).
 - Moon configuration **B** is the selected design (hypothetical, not yet canon):
-  - Liwaya: 1,200 km, 150,000 km out, 7.5-day sidereal orbit.
-  - Nineya: 3,450 km, 360,000 km out, 27.7-day sidereal orbit.
+  - Liwaya: 3,450 km, 360,000 km out, 27.7-day sidereal orbit.
+  - Nineya: 1,200 km, 150,000 km out, 7.5-day sidereal orbit.
   - Stable over 3,000 simulated years and across random starting phases.
+- Aureth is a **G-type** star: about 1.00 solar masses (derived from the 374-day year at 0.87 AU) and solar luminosity.

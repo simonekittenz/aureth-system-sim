@@ -38,6 +38,7 @@ def load_preset():
 
 def reset_planet():
     st.session_state.update({
+        "p_lum": 1.0, "p_srad": 1.0,
         "p_radius": CANON.radius_km, "p_mass": CANON.mass_earth, "p_rot": CANON.rotation_hours,
         "p_sid": "solar", "p_a": CANON.a_au, "p_ecc": CANON.ecc, "p_obl": CANON.obliquity_deg,
         "p_star": CANON.star_mass_msun,
@@ -63,11 +64,13 @@ with st.sidebar:
         st.number_input("Rotation period (Earth hours)", 2.0, 200.0, step=0.5, key="p_rot")
         st.radio("The rotation period is a", ["solar", "sidereal"], key="p_sid", horizontal=True,
                  help="Sidereal: relative to the stars. Solar: noon to noon.")
-        st.number_input("Distance from star (AU)", 0.1, 5.0, step=0.01, key="p_a")
+        st.number_input("Distance from star (AU)", 0.1, 5.0, step=0.01, format="%.3f", key="p_a")
         st.number_input("Orbital eccentricity", 0.0, 0.5, step=0.005, format="%.3f", key="p_ecc")
         st.number_input("Axial tilt (deg)", 0.0, 90.0, step=1.0, key="p_obl")
         st.number_input("Stellar mass (solar masses)", 0.2, 3.0, step=0.001, format="%.4f", key="p_star",
-                        help="Default is the value implied by a 374-day, 19-hour year at 0.87 AU.")
+                        help="Aureth is G-type. Default is the mass implied by a 374-day, 19-hour year at 0.87 AU.")
+        st.number_input("Stellar luminosity (solar)", 0.01, 5.0, step=0.01, format="%.3f", key="p_lum")
+        st.number_input("Stellar radius (solar)", 0.1, 3.0, step=0.01, format="%.3f", key="p_srad")
 
     for key, label in zip(MOON_KEYS, ("Liwaya", "Nineya")):
         with st.expander(label, expanded=False):
@@ -93,6 +96,7 @@ def build_system() -> System:
         radius_km=ss["p_radius"], mass_kg=ss["p_mass"] * M_EARTH, rotation_hours=ss["p_rot"],
         rotation_is_sidereal=ss["p_sid"] == "sidereal", a_au=ss["p_a"], ecc=ss["p_ecc"],
         obliquity_deg=ss["p_obl"], star_mass_kg=ss["p_star"] * M_SUN,
+        star_luminosity_lsun=ss["p_lum"], star_radius_rsun=ss["p_srad"],
     )
     moons = tuple(
         Moon(name, ss[f"{k}_dia"], ss[f"{k}_rho"], float(ss[f"{k}_a"]), ss[f"{k}_e"], ss[f"{k}_inc"],
@@ -141,7 +145,7 @@ with tabs[0]:
             ("Year in sidereal rotations", f"{planet.sidereal_rotations_per_year:.2f}", "derived"),
             ("Year in solar days", f"{planet.solar_days_per_year:.2f}", "derived (matches canon 374)"),
             ("Implied stellar mass", f"{planet.star_mass_msun:.4f} Msun", "derived"),
-            ("Stellar flux", f"{planet.irradiance_earth:.2f} x Earth", "derived, assumes L = 1 Lsun"),
+            ("Stellar flux", f"{planet.irradiance_earth:.2f} x Earth", "derived from the star's luminosity"),
             ("Sun's apparent size", f"{planet.sun_angular_diameter_deg():.3f}°", "derived"),
             ("Hill sphere radius", f"{planet.hill_radius_km:,.0f} km", "derived"),
             ("Synchronous orbit (this spin)", f"{planet.synchronous_orbit_km:,.0f} km", "derived"),
@@ -189,7 +193,7 @@ with tabs[0]:
         [(n, f"{v:.2f}", f"{v / planet.local_day_days:.2f}") for n, v in pr],
         columns=["Cycle", "Earth days", "Bajurindan days"]), hide_index=True, width="stretch")
     c3, c4, c5 = st.columns(3)
-    c3.metric("Period ratio (Nineya / Liwaya)", f"{report['period_ratio']:.3f}")
+    c3.metric(f"Period ratio ({report['outer']} / {report['inner']})", f"{report['period_ratio']:.3f}")
     c4.metric("Spacing (mutual Hill radii)", f"{report['mutual_hill_sep']:.1f}", help="Below ~3.5 is unstable for circular coplanar orbits.")
     c5.metric("Solar tide vs Earth's Moon", f"{report['sun_tide_vs_luna']:.2f}")
     if report["resonances"]:

@@ -6,7 +6,6 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from .constants import R_SUN_KM
 from .dynamics import StabilityResult, Track
 from .model import System, angular_diameter_deg, stable_limit_km
 from .sky import TideSeries, elongation, illuminated_fraction, phase_disc
@@ -103,7 +102,7 @@ def sky_discs_figure(system: System, track: Track, i: int) -> go.Figure:
         el = float(elongation(track.moon_pos[:, k], track.star_pos)[i]) % (2 * np.pi)
         items.append((m.name, ang, frac, el < np.pi, COL[m.name]))
     items.append(("Earth's Moon (reference)", angular_diameter_deg(1737.4, 384400), 1.0, True, "#868e96"))
-    sun_ang = angular_diameter_deg(R_SUN_KM, float(np.linalg.norm(track.star_pos[i])))
+    sun_ang = angular_diameter_deg(pl.star_radius_km, float(np.linalg.norm(track.star_pos[i])))
     items.append(("Sun", sun_ang, 1.0, True, COL["Sun"]))
     for name, ang, frac, waxing, col in items:
         r = ang / 2

@@ -32,6 +32,7 @@ class Planet:
     obliquity_deg: float = 16.0
     star_mass_kg: float = 0.0
     star_luminosity_lsun: float = 1.0
+    star_radius_rsun: float = 1.0
 
     @property
     def mass_earth(self) -> float:
@@ -115,8 +116,12 @@ class Planet:
         )
         return r5 ** 0.2
 
+    @property
+    def star_radius_km(self) -> float:
+        return self.star_radius_rsun * R_SUN_KM
+
     def sun_angular_diameter_deg(self) -> float:
-        return angular_diameter_deg(R_SUN_KM, self.a_km)
+        return angular_diameter_deg(self.star_radius_km, self.a_km)
 
 
 def canon_planet(year_local_days: float = 374.0, day_hours: float = 19.0) -> Planet:

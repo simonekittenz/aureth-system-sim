@@ -1,0 +1,68 @@
+# Shared data for the Aureth system tools.
+# status: canon     = stated in the alteria_world files
+#         decision  = chosen by the author in conversation, not yet in the world files
+#         derived   = calculated from the above
+#         unknown   = not settled; do not guess
+# Distances for planets marked unknown must be filled in before the system tools can place them.
+
+star:
+  name: Aureth
+  type: G-type            # decision: world file still says K-type (orange dwarf)
+  mass_msun: 1.0021       # derived: implied by Bayurinda's 374 solar days of 19 h at 0.87 AU
+  luminosity_lsun: 1.0    # assumed solar
+  radius_rsun: 1.0        # assumed solar
+
+planets:
+  - name: Calderic
+    rank: 1
+    type: barren world
+    distance_au: null
+    status: unknown
+  - name: Nerveric
+    rank: 2
+    type: toxic world
+    distance_au: null
+    status: unknown
+  - name: Bayurinda
+    rank: 3
+    type: ocean world
+    distance_au: 0.87
+    eccentricity: 0.04
+    axial_tilt_deg: 16
+    day_hours: 19              # solar day
+    year_solar_days: 374
+    status: canon
+    moons: [Liwaya, Nineya]    # Liwaya larger, Nineya smaller; orbits are design choices (see presets.py)
+  - name: Ashara
+    rank: 4
+    type: cluster world
+    distance_au: 1.1
+    status: decision           # rank implies it lies between Bayurinda and Tarnic
+    derived:
+      year_days: 420.9
+      sunlight_earth: 0.83
+  - name: Tarnic
+    rank: 5
+    type: volcanic world
+    distance_au: 1.38
+    eccentricity: 0.045
+    axial_tilt_deg: 29
+    day_hours: 25
+    year_days_of_day_length: 567
+    status: canon
+    moons: [Scornia]
+  - name: Oric
+    rank: 6
+    type: gas giant
+    distance_au: null
+    status: unknown
+  - name: Wenderic
+    rank: 7
+    type: eccentric, cryovolcanic, ice world
+    distance_au: null
+    status: unknown
+  - name: Roderic
+    rank: 8
+    type: ringed gas giant
+    distance_au: null
+    status: unknown
