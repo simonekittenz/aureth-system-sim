@@ -32,7 +32,25 @@ planets:
     day_hours: 19              # solar day
     year_solar_days: 374
     status: canon
-    moons: [Liwaya, Nineya]    # Liwaya larger, Nineya smaller; orbits are design choices (see presets.py)
+    moons:                     # Design B: author's chosen design, hypothetical, not yet in the world files
+      - name: Liwaya           # the larger moon (canon)
+        status: decision
+        diameter_km: 3450
+        mean_distance_km: 358700
+        sidereal_days: 27.55
+        phase_cycle_solar_days: 38.36
+        tilt_deg: 1.5
+      - name: Nineya           # the smaller moon (canon)
+        status: decision
+        diameter_km: 1200
+        mean_distance_km: 149400
+        sidereal_days: 7.45
+        phase_cycle_solar_days: 9.65
+        tilt_deg: 1.5
+    moon_pairing:
+      status: decision
+      repeat_solar_days: 1496  # 39 Liwaya cycles = 155 Nineya cycles = 4 years
+      plane_realignment_years: 66.5
   - name: Ashara
     rank: 4
     type: cluster world

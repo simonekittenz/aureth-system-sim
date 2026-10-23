@@ -10,6 +10,7 @@ import streamlit as st
 
 from bajurinda import plots
 from bajurinda.constants import M_EARTH, M_SUN, YEAR_DAYS
+from bajurinda.lunar_calendar import build_calendar
 from bajurinda.dynamics import integrate, mean_rates, phase_ensemble, stability_run
 from bajurinda.model import (
     Moon, Planet, System, canon_planet, moon_report, planet_warnings, system_report,
@@ -55,8 +56,8 @@ ss = st.session_state
 
 with st.sidebar:
     st.title("Bajurinda")
-    st.selectbox("Moon configuration", list(PRESETS), key="preset", on_change=load_preset)
-    st.caption(PRESETS[ss["preset"]][0])
+    st.caption(PRESETS[DEFAULT_PRESET][0])
+    st.button("Reset moons to Design B", on_click=load_preset)
 
     with st.expander("Planet and star (canon defaults)", expanded=False):
         st.button("Reset to canon", on_click=reset_planet)
@@ -133,7 +134,7 @@ rates = get_rates(system)
 report_system = System(planet, tuple(replace(m, a_km=d) for m, d in zip(system.moons, rates["distance"])))
 report = system_report(report_system)
 
-tabs = st.tabs(["Overview", "Orbits", "Phases & sky", "Tides", "Alignments", "Stability", "Method & caveats"])
+tabs = st.tabs(["Overview", "Orbits", "Phases & sky", "Tides", "Alignments", "Calendar", "Stability", "Method & caveats"])
 
 # ------------------------------------------------------------------ Overview
 with tabs[0]:
@@ -291,8 +292,72 @@ with tabs[4]:
         st.dataframe(df[df["Event"].isin(pick)], hide_index=True, width="stretch")
     st.caption("Extend the simulated span in the sidebar (up to 1,500 days) to see rarer alignments.")
 
-# ------------------------------------------------------------------ Stability
+# ------------------------------------------------------------------ Calendar
 with tabs[5]:
+    st.subheader("Calendar across the repeating cycle")
+    st.write("Months follow the larger moon's phase cycle and weeks follow the smaller moon's, each counted in whole "
+             "Bajurindan solar days from the founding moment (day 1). A *double* is a Liwaya phase with a Nineya phase "
+             "of the same kind falling within the tolerance. Names and structure are placeholders.")
+    names = tuple(m.name for m in system.moons)
+    c1, c2, c3 = st.columns(3)
+    start_kind = c1.radio("Months and weeks begin at", ["full", "new"], format_func=lambda k: f"{k} moon", horizontal=True)
+    tol = c2.slider("Tolerance for a 'double' (Bajurindan days)", 0.1, 2.0, 0.5, step=0.1)
+    n_cycles = c3.select_slider("Cycles to show", [1, 2, 3], value=1)
+
+    cycle_years = (repeat / planet.year_days) if repeat else 4.0
+    if abs(cycle_years - round(cycle_years)) < 0.05 and round(cycle_years) >= 1:
+        cycle_days = round(cycle_years) * planet.year_days
+    else:
+        cycle_days = repeat if repeat else 4 * planet.year_days
+    span = cycle_days * n_cycles
+
+    @st.cache_data(show_spinner="Simulating the calendar span...")
+    def get_cycle_track(system: System, span_days: float):
+        return integrate(system, np.insert(np.arange(0.25, span_days + 120, 0.25), 0, 0.0))
+
+    cal = build_calendar(system, get_cycle_track(system, span), start_kind, tol, span_days=span)
+    ml = [m["length_days"] for m in cal.months]
+    wl = [w["length_days"] for w in cal.weeks]
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Cycle length", f"{cycle_days / planet.local_day_days:,.0f} days", f"{cycle_days / planet.year_days:.2f} years")
+    k2.metric("Months", f"{len(ml)}", f"{ml.count(min(ml))} x {min(ml)} days, {ml.count(max(ml))} x {max(ml)} days" if ml else "")
+    k3.metric("Weeks", f"{len(wl)}", f"{wl.count(min(wl))} x {min(wl)} days, {wl.count(max(wl))} x {max(wl)} days" if wl else "")
+    wraps = (n_cycles == 1 and len(cal.runs) > 1 and cal.runs[0]["kind"] == cal.runs[-1]["kind"]
+             and cal.runs[0]["first_month"] == 1 and cal.runs[-1]["last_month"] == len(cal.months))
+    k4.metric("Double runs", f"{len(cal.runs) - (1 if wraps else 0)}", "first and last runs join across the cycle boundary" if wraps else None, delta_color="off")
+    st.plotly_chart(plots.calendar_figure(cal, names), width="stretch")
+    st.caption("Gold bands: runs of consecutive double-full months. Purple bands: double-new. A run that straddles the end "
+               "of one cycle continues at the start of the next; show 2 cycles to see it whole.")
+
+    if cal.runs:
+        st.markdown("**Double runs**")
+        st.dataframe(pd.DataFrame([{
+            "Kind": f"double {r['kind']}", "Months": f"{r['first_month']}-{r['last_month']}", "Length (months)": r["count"],
+            "Days": f"{r['start_day']}-{r['end_day']}", "Best month": r["best_month"], "Best day": r["best_day"],
+            "Best offset (days)": round(r["best_offset"], 2)} for r in cal.runs]), hide_index=True, width="stretch")
+
+    st.markdown(f"**Months** (follow {names[0]})")
+    def mark(flag, off):
+        return f"yes ({off:+.2f})" if flag else (f"{off:+.2f}" if off is not None else "")
+    st.dataframe(pd.DataFrame([{
+        "Month": m["month"], "Year": m["year"], "Day of year": m["day_of_year"], "Starts (day #)": m["start_day"],
+        "Length (days)": m["length_days"], "Exact length": round(m["exact_days"], 2),
+        "Full moon (day #)": m["full_day"], "New moon (day #)": m["new_day"],
+        f"{names[1]} offset at full": mark(m["double_full"], m["full_offset"]),
+        f"{names[1]} offset at new": mark(m["double_new"], m["new_offset"]),
+    } for m in cal.months]), hide_index=True, width="stretch", height=420)
+
+    st.markdown(f"**Weeks** (follow {names[1]})")
+    st.dataframe(pd.DataFrame([{
+        "Week": w["week"], "Year": w["year"], "Day of year": w["day_of_year"], "Starts (day #)": w["start_day"],
+        "Length (days)": w["length_days"], "Exact length": round(w["exact_days"], 2),
+        "In month": w["month"], "Day of month": w["day_of_month"]} for w in cal.weeks]),
+        hide_index=True, width="stretch", height=420)
+    st.caption("Real lunar months wander by a few tenths of a day around these averages, so a calendar that counts days "
+               "will drift slightly from the moon. Nineya's cycle is steadier than Liwaya's.")
+
+# ------------------------------------------------------------------ Stability
+with tabs[6]:
     st.subheader("Orbital stability")
     st.write("N-body integration of star + planet + both moons. A single run is not conclusive: this system "
              "can be stable for some starting phases and not others. Use the phase ensemble before trusting a configuration.")
@@ -337,7 +402,7 @@ with tabs[5]:
             st.caption("Losses at (years): " + ", ".join(f"{y:.0f}" for y in lost))
 
 # ------------------------------------------------------------------ Method
-with tabs[6]:
+with tabs[7]:
     st.markdown("""
 **Status labels** used throughout: *canon* (your established worldbuilding), *derived* (calculated from canon),
 *hypothetical* (a design choice, such as anything about the moons), and *validated* (checked by simulation, within the stated limits).

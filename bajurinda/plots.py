@@ -8,6 +8,7 @@ from plotly.subplots import make_subplots
 
 from .dynamics import StabilityResult, Track
 from .model import System, angular_diameter_deg, stable_limit_km
+from .lunar_calendar import CalendarData
 from .sky import TideSeries, elongation, illuminated_fraction, phase_disc
 
 COL = {"Liwaya": "#4cc9f0", "Nineya": "#f72585", "Sun": "#ffb703", "total": "#e9ecef"}
@@ -168,4 +169,35 @@ def stability_figure(system: System, res: StabilityResult) -> go.Figure:
         fig.add_trace(go.Scatter(x=x[ok], y=tr.inc[ok, k], showlegend=False, line=dict(color=c)), 3, 1)
     fig.update_xaxes(title_text="years", row=3, col=1)
     fig.update_layout(height=640, margin=dict(l=10, r=10, t=40, b=10), legend=dict(orientation="h", y=1.07))
+    return fig
+
+
+def calendar_figure(cal: CalendarData, moon_names: tuple[str, str]) -> go.Figure:
+    D = cal.day_len
+    fig = go.Figure()
+    last_day = max((m["start_day"] + m["length_days"] for m in cal.months), default=cal.year_len)
+    for r in cal.runs:
+        fig.add_vrect(x0=r["start_day"] - 2, x1=r["end_day"] + 2, line_width=0,
+                      fillcolor="rgba(255,183,3,0.22)" if r["kind"] == "full" else "rgba(131,56,236,0.22)", layer="below")
+    for y in range(0, int(last_day // cal.year_len) + 2):
+        fig.add_vline(x=y * cal.year_len + 1, line=dict(color="#868e96", dash="dot", width=1))
+    rows = [(moon_names[1], 1, 1), (moon_names[0], 2, 0)]
+    for name, y, k in rows:
+        for kind, symbol, fill in (("full", "circle", COL[name]), ("new", "circle-open", COL[name])):
+            ts = cal.events[(k, kind)]
+            ts = ts[ts / D + 1 <= last_day]
+            fig.add_trace(go.Scatter(
+                x=ts / D + 1, y=[y] * len(ts), mode="markers", name=f"{name} {kind}",
+                marker=dict(size=9 if k == 0 else 6, symbol=symbol, color=fill, line=dict(width=1.5, color=fill)),
+                hovertemplate=f"{name} {kind} moon<br>day %{{x:.1f}}<extra></extra>"))
+    for kind, colour in (("full", "#ffb703"), ("new", "#8338ec")):
+        pts = [m for m in cal.months if m[f"double_{kind}"]]
+        fig.add_trace(go.Scatter(
+            x=[m[f"{kind}_t"] / D + 1 for m in pts], y=[3] * len(pts), mode="markers", name=f"double {kind}",
+            marker=dict(size=13, symbol="star", color=colour),
+            hovertemplate=f"double {kind}<br>day %{{x:.1f}}<extra></extra>"))
+    fig.update_layout(
+        height=330, margin=dict(l=10, r=10, t=10, b=10), legend=dict(orientation="h", y=1.18),
+        xaxis=dict(title="Bajurindan day (dotted lines mark the start of each year)", range=[0, last_day + 5]),
+        yaxis=dict(tickmode="array", tickvals=[1, 2, 3], ticktext=[moon_names[1], moon_names[0], "doubles"], range=[0.4, 3.6]))
     return fig

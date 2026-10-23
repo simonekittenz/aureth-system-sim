@@ -24,9 +24,14 @@ A browser tab opens at http://localhost:8501.
 | `bajurinda/plots.py` | Plotly figures |
 | `app.py` | The UI |
 
+## Calendar tab
+
+Lists every month (Liwaya's phase cycle) and week (Nineya's phase cycle) across the repeating cycle, with
+runs of double-full and double-new moons marked. Month and week names and structure are placeholders.
+
 ## Not yet implemented
 
-Tidal evolution (REBOUNDx), tidal locking timescales, eclipses, precession.
+Tidal evolution (REBOUNDx), tidal locking timescales, eclipse tracking, precession.
 
 ## Design decisions
 
