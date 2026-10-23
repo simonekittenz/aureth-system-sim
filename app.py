@@ -1,0 +1,330 @@
+from __future__ import annotations
+
+import math
+import warnings
+
+import numpy as np
+import pandas as pd
+import streamlit as st
+
+from bajurinda import plots
+from bajurinda.constants import M_EARTH, M_SUN, YEAR_DAYS
+from bajurinda.dynamics import integrate, phase_ensemble, stability_run
+from bajurinda.model import (
+    Moon, Planet, System, canon_planet, moon_report, planet_warnings, system_report,
+)
+from bajurinda.presets import DEFAULT_PRESET, PRESETS
+from bajurinda.sky import (
+    alignment_events, altitude_deg, crossings, pattern_periods, tide_series,
+)
+
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+st.set_page_config(page_title="Bajurinda two-moon simulator", layout="wide")
+
+CANON = canon_planet()
+MOON_KEYS = ("L", "N")
+
+
+def load_preset():
+    _, liw, nin = PRESETS[st.session_state["preset"]]
+    for key, m in zip(MOON_KEYS, (liw, nin)):
+        st.session_state.update({
+            f"{key}_dia": float(m.diameter_km), f"{key}_rho": float(m.density_gcc),
+            f"{key}_a": int(m.a_km), f"{key}_e": float(m.ecc), f"{key}_inc": float(m.inc_deg),
+            f"{key}_M": float(m.mean_anomaly_deg), f"{key}_Om": float(m.asc_node_deg),
+            f"{key}_w": float(m.arg_peri_deg),
+        })
+
+
+def reset_planet():
+    st.session_state.update({
+        "p_radius": CANON.radius_km, "p_mass": CANON.mass_earth, "p_rot": CANON.rotation_hours,
+        "p_sid": "solar", "p_a": CANON.a_au, "p_ecc": CANON.ecc, "p_obl": CANON.obliquity_deg,
+        "p_star": CANON.star_mass_msun,
+    })
+
+
+if "preset" not in st.session_state:
+    st.session_state["preset"] = DEFAULT_PRESET
+    load_preset()
+    reset_planet()
+
+ss = st.session_state
+
+with st.sidebar:
+    st.title("Bajurinda")
+    st.selectbox("Moon configuration", list(PRESETS), key="preset", on_change=load_preset)
+    st.caption(PRESETS[ss["preset"]][0])
+
+    with st.expander("Planet and star (canon defaults)", expanded=False):
+        st.button("Reset to canon", on_click=reset_planet)
+        st.number_input("Radius (km)", 1000.0, 20000.0, step=50.0, key="p_radius")
+        st.number_input("Mass (Earth masses)", 0.05, 10.0, step=0.01, format="%.4f", key="p_mass")
+        st.number_input("Rotation period (Earth hours)", 2.0, 200.0, step=0.5, key="p_rot")
+        st.radio("The rotation period is a", ["solar", "sidereal"], key="p_sid", horizontal=True,
+                 help="Sidereal: relative to the stars. Solar: noon to noon.")
+        st.number_input("Distance from star (AU)", 0.1, 5.0, step=0.01, key="p_a")
+        st.number_input("Orbital eccentricity", 0.0, 0.5, step=0.005, format="%.3f", key="p_ecc")
+        st.number_input("Axial tilt (deg)", 0.0, 90.0, step=1.0, key="p_obl")
+        st.number_input("Stellar mass (solar masses)", 0.2, 3.0, step=0.001, format="%.4f", key="p_star",
+                        help="Default is the value implied by a 374-day, 19-hour year at 0.87 AU.")
+
+    for key, label in zip(MOON_KEYS, ("Liwaya", "Nineya")):
+        with st.expander(label, expanded=False):
+            st.number_input("Diameter (km)", 200.0, 8000.0, step=50.0, key=f"{key}_dia")
+            st.number_input("Density (g/cm³)", 1.0, 6.0, step=0.1, key=f"{key}_rho")
+            st.slider("Semi-major axis (km)", 30_000, 700_000, step=1_000, key=f"{key}_a")
+            st.slider("Eccentricity", 0.0, 0.3, step=0.005, key=f"{key}_e")
+            st.slider("Inclination to the ecliptic (deg)", 0.0, 30.0, step=0.1, key=f"{key}_inc")
+            st.slider("Starting orbital phase (deg)", 0.0, 360.0, step=1.0, key=f"{key}_M")
+            st.slider("Longitude of ascending node (deg)", 0.0, 360.0, step=1.0, key=f"{key}_Om")
+            st.slider("Argument of periapsis (deg)", 0.0, 360.0, step=1.0, key=f"{key}_w")
+
+    st.subheader("View")
+    window = st.slider("Simulated span (Earth days)", 30, 1500, 240, step=10)
+    step_h = st.select_slider("Sampling step (hours)", [1, 2, 3, 4, 6, 12], value=3)
+    lat = st.slider("Observer latitude (deg)", -90, 90, 10)
+    lon = st.slider("Observer longitude (deg)", -180, 180, 0)
+    unit = st.radio("Time unit for plots", ["Earth days", "Bajurindan days"], horizontal=True)
+
+
+def build_system() -> System:
+    planet = Planet(
+        radius_km=ss["p_radius"], mass_kg=ss["p_mass"] * M_EARTH, rotation_hours=ss["p_rot"],
+        rotation_is_sidereal=ss["p_sid"] == "sidereal", a_au=ss["p_a"], ecc=ss["p_ecc"],
+        obliquity_deg=ss["p_obl"], star_mass_kg=ss["p_star"] * M_SUN,
+    )
+    moons = tuple(
+        Moon(name, ss[f"{k}_dia"], ss[f"{k}_rho"], float(ss[f"{k}_a"]), ss[f"{k}_e"], ss[f"{k}_inc"],
+             ss[f"{k}_M"], ss[f"{k}_Om"], ss[f"{k}_w"])
+        for k, name in zip(MOON_KEYS, ("Liwaya", "Nineya"))
+    )
+    return System(planet, moons)
+
+
+system = build_system()
+planet = system.planet
+report = system_report(system)
+unit_days = planet.local_day_days if unit == "Bajurindan days" else 1.0
+unit_label = "Bajurindan (solar) days" if unit == "Bajurindan days" else "Earth days"
+
+
+@st.cache_data(show_spinner="Integrating orbits with REBOUND...")
+def get_track(system: System, window_days: int, step_hours: int):
+    times = np.arange(step_hours / 24, window_days + 1e-9, step_hours / 24)
+    times = np.insert(times, 0, 0.0)
+    return integrate(system, times)
+
+
+track = get_track(system, window, step_h)
+
+tabs = st.tabs(["Overview", "Orbits", "Phases & sky", "Tides", "Alignments", "Stability", "Method & caveats"])
+
+# ------------------------------------------------------------------ Overview
+with tabs[0]:
+    st.header("Bajurinda: two-moon system")
+    for sev, msg in planet_warnings(system):
+        {"error": st.error, "warning": st.warning, "info": st.info}[sev](msg)
+
+    c1, c2 = st.columns([1.1, 1])
+    with c1:
+        st.subheader("Planet and calendar")
+        rows = [
+            ("Radius", f"{planet.radius_km:,.0f} km", "canon (diameter 12,000 km)"),
+            ("Surface gravity", f"{planet.gravity_g:.3f} g", "canon 0.9 g"),
+            ("Mass", f"{planet.mass_earth:.4f} Earth", "derived from g and radius"),
+            ("Mean density", f"{planet.density_gcc:.2f} g/cm³", "derived"),
+            ("Escape velocity", f"{planet.escape_velocity_kms:.2f} km/s", "derived"),
+            ("Rotation (sidereal)", f"{planet.sidereal_rotation_hours:.4f} h", "derived from the 19 h solar day"),
+            ("Solar day", f"{planet.solar_day_hours:.4f} h", "canon 19 h"),
+            ("Year", f"{planet.year_days:.3f} Earth days", "derived (Kepler)"),
+            ("Year in sidereal rotations", f"{planet.sidereal_rotations_per_year:.2f}", "derived"),
+            ("Year in solar days", f"{planet.solar_days_per_year:.2f}", "derived (matches canon 374)"),
+            ("Implied stellar mass", f"{planet.star_mass_msun:.4f} Msun", "derived"),
+            ("Stellar flux", f"{planet.irradiance_earth:.2f} x Earth", "derived, assumes L = 1 Lsun"),
+            ("Sun's apparent size", f"{planet.sun_angular_diameter_deg():.3f}°", "derived"),
+            ("Hill sphere radius", f"{planet.hill_radius_km:,.0f} km", "derived"),
+            ("Synchronous orbit (this spin)", f"{planet.synchronous_orbit_km:,.0f} km", "derived"),
+            ("Laplace-plane radius (approx.)", f"{planet.laplace_radius_km:,.0f} km", "derived, rough J2"),
+        ]
+        st.dataframe(pd.DataFrame(rows, columns=["Property", "Value", "Origin"]), hide_index=True, width="stretch")
+    with c2:
+        st.subheader("Moons")
+        a, b = (report["moons"][m.name] for m in system.moons)
+        spec = [
+            ("Mass (Earth's Moon = 1)", "mass_luna", "{:.3f}"),
+            ("Semi-major axis (km)", "a_km", "{:,.0f}"),
+            ("Distance (planet radii)", "a_planet_radii", "{:.1f}"),
+            ("Distance / planet Hill radius", "a_hill_frac", "{:.3f}"),
+            ("Use of single-moon stability limit", "stability_fraction", "{:.0%}"),
+            ("Sidereal period (Earth days)", "sidereal_days", "{:.3f}"),
+            ("Sidereal period (local days)", "sidereal_local_days", "{:.2f}"),
+            ("Synodic / phase period (Earth days)", "synodic_days", "{:.3f}"),
+            ("Synodic / phase period (local days)", "synodic_local_days", "{:.2f}"),
+            ("Apparent diameter, mean (deg)", "ang_diam_mean_deg", "{:.3f}"),
+            ("Apparent diameter, closest (deg)", "ang_diam_peri_deg", "{:.3f}"),
+            ("Apparent diameter, farthest (deg)", "ang_diam_apo_deg", "{:.3f}"),
+            ("Peak tide height (m, equilibrium)", "tide_amp_m", "{:.3f}"),
+            ("Tide strength vs Earth's Moon", "tide_vs_luna", "{:.2f}"),
+            ("  at periapsis", "tide_vs_luna_peri", "{:.2f}"),
+            ("  at apoapsis", "tide_vs_luna_apo", "{:.2f}"),
+            ("Fluid Roche limit (km)", "roche_fluid_km", "{:,.0f}"),
+            ("Moon / planet mass", "mass_ratio", "{:.2%}"),
+        ]
+        st.dataframe(pd.DataFrame(
+            [(label, fmt.format(a[k]), fmt.format(b[k])) for label, k, fmt in spec],
+            columns=["", system.moons[0].name, system.moons[1].name]), hide_index=True, width="stretch", height=670)
+
+    st.subheader("Recurring patterns")
+    pp = pattern_periods(system)
+    pr = [
+        ("Liwaya phase cycle (synodic)", pp["liwaya_synodic"]),
+        ("Nineya phase cycle (synodic)", pp["nineya_synodic"]),
+        ("Liwaya and Nineya line up again (also the phase-beat)", pp["moon_moon_conjunction"]),
+        ("Liwaya-Sun spring tide recurrence", pp["liwaya_spring_neap"]),
+        ("Nineya-Sun spring tide recurrence", pp["nineya_spring_neap"]),
+        ("Moon-moon tidal reinforcement recurrence", pp["moon_moon_tidal_alignment"]),
+    ]
+    st.dataframe(pd.DataFrame(
+        [(n, f"{v:.2f}", f"{v / planet.local_day_days:.2f}") for n, v in pr],
+        columns=["Cycle", "Earth days", "Bajurindan days"]), hide_index=True, width="stretch")
+    c3, c4, c5 = st.columns(3)
+    c3.metric("Period ratio (Nineya / Liwaya)", f"{report['period_ratio']:.3f}")
+    c4.metric("Spacing (mutual Hill radii)", f"{report['mutual_hill_sep']:.1f}", help="Below ~3.5 is unstable for circular coplanar orbits.")
+    c5.metric("Solar tide vs Earth's Moon", f"{report['sun_tide_vs_luna']:.2f}")
+    if report["resonances"]:
+        st.caption("Nearest mean-motion resonances: " + ", ".join(
+            f"{r['resonance']} ({r['offset_pct']:+.2f}%)" for r in report["resonances"][:3]))
+
+# ------------------------------------------------------------------ Orbits
+with tabs[1]:
+    st.subheader("Top-down view, planet-centred")
+    st.caption("Viewed from above the ecliptic. The dotted circle is the approximate single-moon Hill stability limit. "
+               "Press Play, or drag the slider.")
+    st.plotly_chart(plots.orbit_figure(system, track), width="stretch")
+
+# ------------------------------------------------------------------ Phases & sky
+with tabs[2]:
+    st.subheader("Sky at a chosen moment")
+    sel_day = st.slider("Time within the simulated span (Earth days)", 0.0, float(window), 0.0, step=step_h / 24, key="sel_day")
+    i_sel = int(np.argmin(np.abs(track.t - sel_day)))
+    st.plotly_chart(plots.sky_discs_figure(system, track, i_sel), width="stretch")
+    st.caption("Disc widths are true apparent sizes. Lit side is drawn as it would look from the northern hemisphere "
+               "(waxing = lit on the right).")
+
+    alt_vecs = {"Sun": track.star_pos, "Liwaya": track.moon_pos[:, 0], "Nineya": track.moon_pos[:, 1]}
+    alts = {k: altitude_deg(planet, track, v, lat, lon) for k, v in alt_vecs.items()}
+    hi = min(len(track.t), i_sel + int(round(3 * 24 / step_h)))
+    st.subheader(f"Altitude over the next 3 Earth days at {lat}°, {lon}°")
+    st.plotly_chart(plots.altitude_figure(track, alts, unit_days, unit_label, i_sel, hi), width="stretch")
+
+    rs = []
+    for name in ("Liwaya", "Nineya"):
+        up, down = crossings(track.t, alts[name])
+        rs.append((name, up[(up >= sel_day) & (up <= sel_day + 3)], down[(down >= sel_day) & (down <= sel_day + 3)]))
+    cols = st.columns(2)
+    for c, (name, up, down) in zip(cols, rs):
+        c.markdown(f"**{name}**  \nrises (day): {', '.join(f'{x:.2f}' for x in up) or 'none'}  \n"
+                   f"sets (day): {', '.join(f'{x:.2f}' for x in down) or 'none'}")
+
+    st.subheader("Phase timeline")
+    st.plotly_chart(plots.phase_figure(system, track, unit_days, unit_label), width="stretch")
+
+# ------------------------------------------------------------------ Tides
+with tabs[3]:
+    st.subheader("Equilibrium tide")
+    st.caption("Gravitational forcing only: the height of the water surface if the ocean could respond instantly "
+               "and had no continents. Real coastal tides depend on basin shape, depth and resonance, and can be "
+               "many times larger or smaller.")
+    ts = tide_series(system, track, lat, lon)
+    st.plotly_chart(plots.tide_figure(ts, track, unit_days, unit_label), width="stretch")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Strongest tide in span (m)", f"{ts.global_peak.max():.2f}")
+    m2.metric("Weakest 'maximum' tide in span (m)", f"{ts.global_peak.min():.2f}")
+    m3.metric("Largest daily range at site (m)", f"{ts.site_range.max():.2f}")
+    m4.metric("Smallest daily range at site (m)", f"{ts.site_range.min():.2f}")
+    st.caption("Reference: Earth's Moon alone raises roughly 0.36 m of equilibrium bulge on Earth; Moon plus Sun at spring tide, ~0.5 m.")
+
+# ------------------------------------------------------------------ Alignments
+with tabs[4]:
+    st.subheader("Calendar of notable alignments")
+    window_deg = st.slider("'Double full / new' tolerance (deg)", 5, 45, 15)
+    ev = alignment_events(track, window_deg)
+    if ev:
+        df = pd.DataFrame(ev)
+        df["Bajurindan day"] = (df["day"] / planet.local_day_days).round(2)
+        df["day"] = df["day"].round(2)
+        df = df.rename(columns={"day": "Earth day", "event": "Event"})[["Earth day", "Bajurindan day", "Event"]]
+        kinds = sorted({e["event"] for e in ev})
+        pick = st.multiselect("Show", kinds, default=[k for k in kinds if "Double" in k or "conjunction" in k or "opposition" in k])
+        st.dataframe(df[df["Event"].isin(pick)], hide_index=True, width="stretch")
+    st.caption("Extend the simulated span in the sidebar (up to 1,500 days) to see rarer alignments.")
+
+# ------------------------------------------------------------------ Stability
+with tabs[5]:
+    st.subheader("Orbital stability")
+    st.write("N-body integration of star + planet + both moons. A single run is not conclusive: this system "
+             "can be stable for some starting phases and not others. Use the phase ensemble before trusting a configuration.")
+    c1, c2, c3 = st.columns(3)
+    years = c1.select_slider("Years to simulate", [10, 30, 100, 300, 1000, 3000], value=300)
+    n_draw = c2.slider("Random-phase draws", 4, 16, 6)
+    megno = c3.checkbox("Compute MEGNO chaos indicator", value=False, help="About 2 means regular; much larger than 2 means chaotic.")
+    b1, b2 = st.columns(2)
+    sig = (system, years)
+    if b1.button("Run this configuration"):
+        with st.spinner("Integrating..."):
+            ss["stab"] = (sig, stability_run(system, years, megno=megno))
+    if b2.button("Run phase ensemble"):
+        bar = st.progress(0.0)
+        res = phase_ensemble(system, years, n=n_draw, progress=bar.progress)
+        ss["ens"] = (sig, res)
+
+    if "stab" in ss:
+        s_sig, r = ss["stab"]
+        if s_sig != sig:
+            st.info("Settings changed since this run.")
+        (st.success if r.survived else st.error)(f"{'Stable' if r.survived else 'Unstable'}: {r.reason}.")
+        if r.track.megno is not None:
+            st.metric("MEGNO <Y>", f"{r.track.megno:.2f}")
+        st.plotly_chart(plots.stability_figure(system, r), width="stretch")
+        d = pd.DataFrame({
+            "": [m.name for m in system.moons],
+            "a min (km)": r.a_min.round(0), "a max (km)": r.a_max.round(0),
+            "max e": r.e_max.round(3), "max incl (deg)": r.inc_max.round(2),
+            "max distance / stability limit": r.max_dist_frac_of_limit.round(2),
+        })
+        st.dataframe(d, hide_index=True, width="stretch")
+        st.caption(f"Closest moon-moon approach: {r.min_moon_sep_km:,.0f} km.  Osculating elements include real short-period "
+                   "wobbles from the Sun, so they are not constant even in a perfectly stable system.")
+    if "ens" in ss:
+        e_sig, res = ss["ens"]
+        ok = sum(x.survived for x in res)
+        (st.success if ok == len(res) else st.warning if ok else st.error)(
+            f"Phase ensemble: {ok} of {len(res)} random starts survived {e_sig[1]} years.")
+        lost = sorted(x.lost_year for x in res if x.lost_year is not None)
+        if lost:
+            st.caption("Losses at (years): " + ", ".join(f"{y:.0f}" for y in lost))
+
+# ------------------------------------------------------------------ Method
+with tabs[6]:
+    st.markdown("""
+**Status labels** used throughout: *canon* (your established worldbuilding), *derived* (calculated from canon),
+*hypothetical* (a design choice, such as anything about the moons), and *validated* (checked by simulation, within the stated limits).
+
+**Orbits.** REBOUND IAS15 integration of the star, planet and both moons (Newtonian point masses, no planetary
+oblateness, no tides). Moon inclinations are measured from the planet's orbital plane, because both moons lie
+well beyond the planet's Laplace radius (~10 planet radii), where the Sun, not the equatorial bulge, controls the orbit plane.
+
+**Stability.** The Hill-limit figures use Domingos et al. (2006) for a single prograde satellite. With two moons the
+real limit is lower. The N-body results only cover the simulated span (up to a few thousand years); extrapolating
+to millions of years is not justified from this alone.
+
+**Tides.** Equilibrium tide, degree-2 only: ζ = (m/M)(R/d)³·R·(3cos²ψ − 1)/2 for each body, summed. Valid for comparing
+forcing, not for predicting real coastal tides. The 'strongest tide on the planet' trace is the largest eigenvalue of the
+combined tidal tensor, i.e. the best case at any location.
+
+**Phases.** Computed exactly from the three-dimensional geometry (angle at the moon between the Sun and the planet).
+
+**Not yet modelled:** tidal evolution (spin-down, outward migration, locking times), eclipses,
+planetary precession, moon obliquity and libration, atmospheric refraction.
+""")
