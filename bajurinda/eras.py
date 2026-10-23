@@ -10,8 +10,6 @@ from .lunar_calendar import CalendarData, build_calendar
 from .model import System
 from .sky import angle_crossings
 
-YEAR = 374
-
 
 @dataclass
 class ErasData:
@@ -20,6 +18,7 @@ class ErasData:
     mutual_deg: np.ndarray           # angle between the two orbital planes
     overlap_years: np.ndarray        # time of each overlap
     overlap_sep_deg: np.ndarray      # closest approach of the two moon centres at that pass
+    year_len: float                  # Bajurindan solar days per year
     passes: int
     calendar: CalendarData
 
@@ -27,6 +26,7 @@ class ErasData:
 def eras_data(system: System, years: int = 140, step: float = 0.25) -> ErasData:
     pl = system.planet
     D = pl.local_day_days
+    YEAR = pl.year_solar_days
     t = np.arange(0.0, years * YEAR * D + 120, step)
     tr = integrate(system, t, elements=False)
     pos = tr.moon_pos
@@ -58,7 +58,7 @@ def eras_data(system: System, years: int = 140, step: float = 0.25) -> ErasData:
     mutual[0] = 0.0 if system.moons[0].asc_node_deg == system.moons[1].asc_node_deg else mutual[0]
 
     cal = build_calendar(system, tr, "full", 0.5, span_days=years * YEAR * D)
-    return ErasData(years, plane_years, mutual, tc[hit] / D / YEAR, db[hit], len(tc), cal)
+    return ErasData(years, plane_years, mutual, tc[hit] / D / YEAR, db[hit], len(tc), YEAR, cal)
 
 
 def era_bands(data: ErasData, threshold_deg: float) -> list[tuple[float, float]]:
@@ -90,7 +90,7 @@ def era_summary(data: ErasData, bands: list[tuple[float, float]]) -> dict:
     D = cal.day_len
     runs_in = 0
     for r in cal.runs:
-        if inside(r["start_t"] / D / YEAR):
+        if inside(r["start_t"] / D / data.year_len):
             runs_in += 1
     era_years = sum(b - a for a, b in bands)
     return {

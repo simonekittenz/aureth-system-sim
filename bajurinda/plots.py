@@ -12,7 +12,6 @@ from .eras import ErasData
 from .lunar_calendar import CalendarData
 from .sky import TideSeries, elongation, illuminated_fraction, phase_disc
 
-YEAR_LEN = 374
 COL = {"Liwaya": "#4cc9f0", "Nineya": "#f72585", "Sun": "#ffb703", "total": "#e9ecef"}
 
 
@@ -221,7 +220,7 @@ def eras_figure(data: ErasData, bands: list[tuple[float, float]], threshold_deg:
     fig.add_hline(y=threshold_deg, line=dict(color="#ffb703", dash="dot", width=1), row=2, col=1)
     for kind, colour, y in (("full", "#ffb703", 1), ("new", "#8338ec", 0)):
         pts = [m for m in data.calendar.months if m[f"double_{kind}"]]
-        fig.add_trace(go.Scatter(x=[m[f"{kind}_t"] / D / YEAR_LEN for m in pts], y=[y] * len(pts), mode="markers",
+        fig.add_trace(go.Scatter(x=[m[f"{kind}_t"] / D / data.year_len for m in pts], y=[y] * len(pts), mode="markers",
                                  marker=dict(symbol="star", size=9, color=colour), name=f"double {kind}",
                                  hovertemplate=f"double {kind}<br>year %{{x:.2f}}<extra></extra>"), 3, 1)
     for a, b in bands:

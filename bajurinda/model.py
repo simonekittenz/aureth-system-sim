@@ -60,6 +60,10 @@ class Planet:
         return kepler_period_days(self.a_km, self.star_mass_kg + self.mass_kg)
 
     @property
+    def year_solar_days(self) -> float:
+        return self.year_days / self.local_day_days
+
+    @property
     def sidereal_rotation_hours(self) -> float:
         if self.rotation_is_sidereal:
             return self.rotation_hours
@@ -128,14 +132,25 @@ class Planet:
         return angular_diameter_deg(self.star_radius_km, self.a_km)
 
 
-def canon_planet(year_local_days: float = 374.0, day_hours: float = 19.0) -> Planet:
-    """Planet with the canon values. Star mass is derived from the canon year. The star's radius and
-    luminosity are a proposal: a young Sun-mass star (0.88 solar radii, 0.72 solar luminosities)."""
+ORIGINAL_A_AU = 0.87            # the distance and year that first implied Aureth's mass
+ORIGINAL_YEAR_SOLAR_DAYS = 374.0
+
+
+def canon_planet(year_local_days: float = 440.0, day_hours: float = 19.0) -> Planet:
+    """Bayurinda with the current design values.
+
+    The star's mass is pinned to what the original canon implied (0.87 AU and a 374-day year of 19 h days,
+    1.0021 solar masses). The year is now a free choice (default 440 solar days) and sets the distance.
+    The star's radius and luminosity (0.985 and 0.87 solar) model a mature, mildly metal-rich G dwarf
+    (see data/aureth.yaml)."""
     p = Planet(rotation_hours=day_hours, rotation_is_sidereal=False,
-               star_luminosity_lsun=0.72, star_radius_rsun=0.88)
+               star_luminosity_lsun=0.87, star_radius_rsun=0.985)
+    orig_year_s = ORIGINAL_YEAR_SOLAR_DAYS * day_hours * 3600
+    total = 4 * math.pi**2 * (ORIGINAL_A_AU * AU_KM * KM) ** 3 / (G * orig_year_s**2)
+    star_mass = total - p.mass_kg
     year_s = year_local_days * day_hours * 3600
-    total = 4 * math.pi**2 * (p.a_km * KM) ** 3 / (G * year_s**2)
-    return replace(p, star_mass_kg=total - p.mass_kg)
+    a_m = (G * (star_mass + p.mass_kg) * year_s**2 / (4 * math.pi**2)) ** (1 / 3)
+    return replace(p, star_mass_kg=star_mass, a_au=a_m / KM / AU_KM)
 
 
 @dataclass(frozen=True)

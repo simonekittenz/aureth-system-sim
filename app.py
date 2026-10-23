@@ -72,7 +72,7 @@ with st.sidebar:
         st.number_input("Orbital eccentricity", 0.0, 0.5, step=0.005, format="%.3f", key="p_ecc")
         st.number_input("Axial tilt (deg)", 0.0, 90.0, step=1.0, key="p_obl")
         st.number_input("Stellar mass (solar masses)", 0.2, 3.0, step=0.001, format="%.4f", key="p_star",
-                        help="Aureth is G-type. Default is the mass implied by a 374-day, 19-hour year at 0.87 AU.")
+                        help="Aureth is G-type. The default is the mass the original canon implied (a 374-day year at 0.87 AU), kept fixed.")
         st.number_input("Stellar luminosity (solar)", 0.01, 5.0, step=0.01, format="%.3f", key="p_lum",
                         help="A young 1-solar-mass star is about 0.68 to 0.76 (rough).")
         st.number_input("Stellar radius (solar)", 0.1, 3.0, step=0.01, format="%.3f", key="p_srad",
@@ -159,7 +159,7 @@ with tabs[0]:
             ("Solar day", f"{planet.solar_day_hours:.4f} h", "canon 19 h"),
             ("Year", f"{planet.year_days:.3f} Earth days", "derived (Kepler)"),
             ("Year in sidereal rotations", f"{planet.sidereal_rotations_per_year:.2f}", "derived"),
-            ("Year in solar days", f"{planet.solar_days_per_year:.2f}", "derived (matches canon 374)"),
+            ("Year in solar days", f"{planet.solar_days_per_year:.2f}", "derived"),
             ("Implied stellar mass", f"{planet.star_mass_msun:.4f} Msun", "derived"),
             ("Stellar flux", f"{planet.irradiance_earth:.2f} x Earth", "derived from the star's luminosity"),
             ("Sun's apparent size", f"{planet.sun_angular_diameter_deg():.3f}°", "derived"),
@@ -407,7 +407,7 @@ with tabs[7]:
 
     @st.cache_data(show_spinner="Simulating eclipses...")
     def get_ecl_track(system: System, years: int):
-        return integrate(system, np.arange(0, years * 374 * system.planet.local_day_days + 60, 0.25), elements=False)
+        return integrate(system, np.arange(0, years * system.planet.year_solar_days * system.planet.local_day_days + 60, 0.25), elements=False)
 
     etr = get_ecl_track(system, ey)
     ev = eclipse_events(system, etr)
@@ -478,7 +478,7 @@ with tabs[7]:
     seen.sort(key=lambda x: x[0][1])
     st.markdown(f"**At latitude {lat}, longitude {lon}** (sidebar): {len(seen)} solar eclipses in {ey} years")
     if seen:
-        st.dataframe(pd.DataFrame([{"Year": round(e[1] / planet.local_day_days / 374, 2), "Moon": names[e[0]], "Type": TYPE[t_]}
+        st.dataframe(pd.DataFrame([{"Year": round(e[1] / planet.local_day_days / planet.year_solar_days, 2), "Moon": names[e[0]], "Type": TYPE[t_]}
                                    for e, t_ in seen[:40]]), hide_index=True, width="stretch", height=300)
 
 # ------------------------------------------------------------------ Stability

@@ -9,13 +9,11 @@ from .dynamics import Track
 from .model import System
 from .sky import angle_crossings, elongation
 
-YEAR_LOCAL_DAYS = 374
-
 
 @dataclass
 class CalendarData:
     day_len: float                     # Earth days per Bajurindan solar day
-    year_len: float                    # Bajurindan days per year
+    year_len: int                      # whole Bajurindan days per year (rounded)
     events: dict                       # {(moon_index, "full"|"new"): array of Earth-day times}
     months: list[dict]
     weeks: list[dict]
@@ -53,6 +51,7 @@ def build_calendar(system: System, track: Track, start_kind: str = "full",
     with a Nineya event of the same kind within `tolerance_days` (Bajurindan days)."""
     pl = system.planet
     D = pl.local_day_days
+    year_days = int(round(pl.year_solar_days))
     ev = {(k, kind): phase_events(track, k)[kind] for k in range(2) for kind in ("full", "new")}
     end = span_days if span_days is not None else float(track.t[-1])
     tol = tolerance_days * D
@@ -73,7 +72,7 @@ def build_calendar(system: System, track: Track, start_kind: str = "full",
             break
         row = {"month": i + 1, "start_t": float(a), "start_day": _day_number(a, D),
                "length_days": _day_number(b, D) - _day_number(a, D), "exact_days": float((b - a) / D)}
-        row["year"], row["day_of_year"] = _ymd(row["start_day"], YEAR_LOCAL_DAYS)
+        row["year"], row["day_of_year"] = _ymd(row["start_day"], year_days)
         for kind in ("full", "new"):
             inside = ev[(0, kind)][(ev[(0, kind)] >= a - 1e-6) & (ev[(0, kind)] < b - 1e-6)]
             if len(inside):
@@ -99,7 +98,7 @@ def build_calendar(system: System, track: Track, start_kind: str = "full",
                "length_days": _day_number(b, D) - sd, "exact_days": float((b - a) / D),
                "month": months[mi]["month"] if mi is not None else None,
                "day_of_month": sd - month_starts[mi] + 1 if mi is not None else None}
-        row["year"], row["day_of_year"] = _ymd(sd, YEAR_LOCAL_DAYS)
+        row["year"], row["day_of_year"] = _ymd(sd, year_days)
         weeks.append(row)
 
     runs = []
@@ -114,7 +113,7 @@ def build_calendar(system: System, track: Track, start_kind: str = "full",
         if group:
             runs.append(_run(kind, group))
     runs.sort(key=lambda r: r["start_t"])
-    return CalendarData(D, YEAR_LOCAL_DAYS, ev, months, weeks, runs, start_kind)
+    return CalendarData(D, year_days, ev, months, weeks, runs, start_kind)
 
 
 def _run(kind: str, group: list[dict]) -> dict:

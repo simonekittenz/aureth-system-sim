@@ -12,8 +12,8 @@ PRESETS: dict[str, tuple[str, Moon, Moon]] = {
     "Design B": (
         "Liwaya is the large outer moon and dominant tide-raiser; Nineya is a small close moon. "
         "Liwaya phase cycle 38.5 Bajurindan days, Nineya 9.70; 32 Liwaya cycles = 127 Nineya cycles. Starts at a double full moon.",
-        Moon("Liwaya", 3450, 3.3, 365_312, 0.01, 1.5, 0, 0, 0),
-        Moon("Nineya", 1200, 3.3, 150_531, 0.01, 1.5, 0, 0, 0),
+        Moon("Liwaya", 3450, 3.3, 367_434, 0.01, 1.5, 0, 0, 0),
+        Moon("Nineya", 1200, 3.3, 150_860, 0.01, 1.5, 0, 0, 0),
     ),
 }
 

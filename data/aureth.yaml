@@ -7,11 +7,15 @@
 
 star:
   name: Aureth
-  type: G-type            # decision: world file still says K-type (orange dwarf) in some copies; now G-type
-  mass_msun: 1.0021       # derived: implied by Bayurinda's 374 solar days of 19 h at 0.87 AU (Tarnic's canon gives 1.0051)
-  luminosity_lsun: 0.72   # proposal: a young Sun-mass star; makes Bayurinda's sunlight about 0.95x Earth
-  radius_rsun: 0.88       # proposal: small enough that Liwaya can fully cover the Sun (needs < ~0.90)
-  teff_k: 5668            # derived from luminosity and radius
+  type: G-type            # decision (the world file may still say K-type)
+  mass_msun: 1.0021       # pinned: implied by the original canon (374-day year at 0.87 AU); also fits Tarnic to 0.3%
+  luminosity_lsun: 0.87   # proposal: "golden Aureth", a mature, mildly metal-rich G dwarf
+  radius_rsun: 0.985
+  teff_k: 5617            # cooler than the Sun (5772 K)
+  model_note: >
+    MIST v1.2 tracks at 1.0021 solar masses, calibrated so the model Sun matches the real Sun: [Fe/H] about +0.14
+    at about 5 Gyr gives L 0.87, R 0.985, Teff about 5600 K. Solar metals at the same age are too bright;
+    [Fe/H] +0.5 is too dim.
   status: proposal        # mass is pinned by canon; radius and luminosity are free to change
 
 planets:
@@ -28,32 +32,33 @@ planets:
   - name: Bayurinda
     rank: 3
     type: ocean world
-    distance_au: 0.87
+    distance_au: 0.97          # decision: moved out from the original 0.87 so Liwaya can fully cover the Sun
     eccentricity: 0.04
     axial_tilt_deg: 16
     day_hours: 19              # solar day
-    year_solar_days: 374
-    sunlight_earth: 0.95           # derived, at luminosity 0.72
+    year_solar_days: 440       # decision: was 374 at 0.87 AU
+    sunlight_earth: 0.93       # derived
     status: canon
     moons:                     # Design B: author's chosen design, hypothetical, not yet in the world files
       - name: Liwaya           # the larger moon (canon)
         status: decision
         diameter_km: 3450
-        mean_distance_km: 359500
-        sidereal_days: 27.64
+        mean_distance_km: 362900
+        sidereal_days: 28.03
         phase_cycle_solar_days: 38.5
         tilt_deg: 1.5
       - name: Nineya           # the smaller moon (canon)
         status: decision
         diameter_km: 1200
-        mean_distance_km: 149900
-        sidereal_days: 7.49
+        mean_distance_km: 150250
+        sidereal_days: 7.51
         phase_cycle_solar_days: 9.70
         tilt_deg: 1.5
     moon_pairing:
       status: decision
-      repeat_solar_days: 1232  # 32 Liwaya cycles = 127 Nineya cycles = 3.29 years; deliberately not tied to the year
-      plane_realignment_years: 66.4   # measured for the current tuning (minima at years 66.4, 132.9, 199.3, 265.7)
+      repeat_solar_days: 1232  # 32 Liwaya cycles = 127 Nineya cycles = 2.80 years; deliberately not tied to the year
+      plane_realignment_years: 52.7   # measured for the current tuning (minima at years 52.7, 105.4, 158.0, 210.7)
+      solar_eclipses: Liwaya 83% total among central eclipses (Sun looks 0.541 deg, Liwaya 0.545); Nineya rings only
   - name: Ashara
     rank: 4
     type: cluster world
@@ -61,7 +66,7 @@ planets:
     status: decision           # rank implies it lies between Bayurinda and Tarnic
     derived:
       year_days: 420.9
-      sunlight_earth: 0.60     # at luminosity 0.72
+      sunlight_earth: 0.72     # derived
   - name: Tarnic
     rank: 5
     type: volcanic world
@@ -70,7 +75,7 @@ planets:
     axial_tilt_deg: 29
     day_hours: 25
     year_days_of_day_length: 567   # Kepler with the star above gives 567.9 at 1.38 AU (1.3787 AU gives exactly 567)
-    sunlight_earth: 0.38           # derived, at luminosity 0.72
+    sunlight_earth: 0.46           # derived
     status: canon
     moons: [Scornia]
   - name: Oric

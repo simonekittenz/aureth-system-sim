@@ -10,8 +10,6 @@ from .dynamics import Track
 from .model import System
 from .sky import angle_crossings, elongation
 
-YEAR = 374
-
 
 def eclipse_events(system: System, track: Track, star_radius_rsun: float | None = None) -> list[dict]:
     """Solar eclipses (at new moon) and lunar eclipses (at full moon) seen from anywhere on the planet.
@@ -24,6 +22,7 @@ def eclipse_events(system: System, track: Track, star_radius_rsun: float | None 
     """
     pl = system.planet
     D = pl.local_day_days
+    Y = pl.year_solar_days
     rs_km = (star_radius_rsun if star_radius_rsun is not None else pl.star_radius_rsun) * R_SUN_KM
     t = track.t
     d_star = np.linalg.norm(track.star_pos, axis=1)
@@ -50,7 +49,7 @@ def eclipse_events(system: System, track: Track, star_radius_rsun: float | None 
                         typ = "partial"
                     else:
                         typ = "none"
-                    out.append(_row(moon.name, kind, typ, tc[i], D, sep[i], sun_r[i], moon_r[i], near[i]))
+                    out.append(_row(moon.name, kind, typ, tc[i], D, Y, sep[i], sun_r[i], moon_r[i], near[i]))
             else:
                 umbra = reach - sun_r
                 for i in range(len(tc)):
@@ -60,13 +59,13 @@ def eclipse_events(system: System, track: Track, star_radius_rsun: float | None 
                         typ = "partial"
                     else:
                         typ = "none"
-                    out.append(_row(moon.name, kind, typ, tc[i], D, sep[i], sun_r[i], moon_r[i], moon_r[i]))
+                    out.append(_row(moon.name, kind, typ, tc[i], D, Y, sep[i], sun_r[i], moon_r[i], moon_r[i]))
     out.sort(key=lambda e: e["t"])
     return out
 
 
-def _row(moon, kind, typ, t, D, sep, sun_r, moon_r, near):
-    return {"moon": moon, "kind": kind, "type": typ, "t": float(t), "day": float(t / D), "year": float(t / D / YEAR),
+def _row(moon, kind, typ, t, D, Y, sep, sun_r, moon_r, near):
+    return {"moon": moon, "kind": kind, "type": typ, "t": float(t), "day": float(t / D), "year": float(t / D / Y),
             "offset_deg": math.degrees(sep), "sun_deg": 2 * math.degrees(sun_r),
             "moon_deg": 2 * math.degrees(moon_r), "moon_near_deg": 2 * math.degrees(near)}
 

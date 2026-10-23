@@ -55,6 +55,44 @@ Tidal evolution (REBOUNDx), tidal locking timescales, precession.
 
 ## Design decisions
 
+- The 19 h day is a **solar day** (noon to noon). Liwaya is the **larger** moon, Nineya the **smaller** (per the world files).
+- **Aureth** is a G-type star, "the golden Aureth": 1.0021 solar masses (pinned by the original canon), 0.985 solar radii,
+  0.87 solar luminosities, about 5,620 K. This matches a mature (about 5 Gyr), mildly metal-rich ([Fe/H] about +0.14)
+  star in the MIST v1.2 tracks, calibrated to the real Sun. It is a proposal; radius and luminosity are free to change.
+- **Bayurinda** sits at about 0.97 AU with a year of exactly 440 solar days (the original canon was 0.87 AU and 374 days),
+  so the Sun looks 0.541 degrees wide and Liwaya (0.545 degrees) can fully cover it. Sunlight is 0.93x Earth's.
+  Tarnic is unchanged (the star's mass is unchanged).
+- Moon configuration **B** is the selected design (hypothetical, not yet canon):
+  - Liwaya: 3,450 km across, about 362,900 km from Bayurinda on average (28.0 days sidereal, **38.5 Bajurindan days** per phase cycle).
+  - Nineya: 1,200 km across, about 150,250 km on average (7.5 days sidereal, **9.70 Bajurindan days** per phase cycle).
+  - 32 Liwaya cycles = 127 Nineya cycles = 1,232 days (2.80 years). The calendar is deliberately not tied to the solar year.
+  - Both orbits are tilted 1.5 degrees and start at a double full moon with the two moons overlapping.
+  - Stable over 3,000 simulated years and across random starting phases.
+  - The orbital planes drift apart and realign every 52.7 Bajurindan years; overlaps are frequent for a few years around each
+    realignment (about 5 a year on average).
+  - Distances in the sidebar are starting (osculating) values; the Overview shows the simulated averages.
+
+## Calendar tab
+
+Lists every month (Liwaya's phase cycle) and week (Nineya's phase cycle) across the repeating cycle, with
+runs of double-full and double-new moons marked. Month and week names and structure are placeholders.
+
+## Eras tab
+
+A long-run timeline (70-300 years) of how often the two moons overlap, the angle between their orbital planes,
+and where the double-full and double-new months fall. Gold bands mark the stretches when the planes are aligned.
+
+## Eclipses tab
+
+Solar and lunar eclipses for both moons, counted for the whole planet and for a single place, plus a table of what
+different star sizes would do to totality.
+
+## Not yet implemented
+
+Tidal evolution (REBOUNDx), tidal locking timescales, precession.
+
+## Design decisions
+
 - The 19 h day is a **solar day** (noon to noon). Sidereal rotation is therefore 18.949 h, and a year is 374 solar days or 375 rotations.
 - Liwaya is the **larger** moon and Nineya the **smaller** (per the world files).
 - Moon configuration **B** is the selected design (hypothetical, not yet canon):
