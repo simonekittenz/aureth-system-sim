@@ -18,6 +18,15 @@ star:
     [Fe/H] +0.5 is too dim.
   status: proposal        # mass is pinned by canon; radius and luminosity are free to change
 
+# Interplanetary flight (lore from the author's worldbuilding discussions, not yet in the world files).
+# A Weltreyker launches the vessel; once airborne and "nearing", a Sternreyker pilot's ethereal aspect wings change the
+# vessel's velocity continuously. Acceleration depends on the pilot; there are no launch windows.
+sternreykers:
+  status: decision
+  acceleration_g: {novice: 0.6, expert: 1.4}
+  profile: accelerate to the halfway point, then brake (flip-and-burn); the pilot steers freely
+  open_questions: ascent and descent time, how long the wings take to form, rest breaks and pilot fatigue
+
 # Where the planets start at the founding moment (mean anomaly, degrees). Placeholder: all three on one ray from the
 # star at perihelion, so at the founding double full moon the star, Bayurinda, Ashara and Tarnic are in a line.
 system_start:

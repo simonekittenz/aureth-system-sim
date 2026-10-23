@@ -13,7 +13,8 @@ from bajurinda.aureth import (
     AU_KM, COLORS, K2, Body, Star, all_positions, conjunction_minima, crossing_times, grand_alignments, load_system,
     nbody_track, pair_table, period_days, planet_table, sky_from, synodic_days,
 )
-from bajurinda.transfers import find_windows, hohmann, launch_speed, porkchop
+from bajurinda.flights import route_extremes, scan_route
+from bajurinda.transfers import find_windows, hohmann, porkchop
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
@@ -163,55 +164,97 @@ with tabs[2]:
 
 # ------------------------------------------------------------------ Transfers
 with tabs[3]:
-    st.subheader("Launch windows")
-    st.write("A transfer is cheapest when the two planets are in the right places. The cost shown is the speed the traveller "
-             "gains leaving one planet plus the speed they must shed at the other, both measured against the planet (km/s). "
-             "How the mechs actually pay for that, with their wings and nearing, is up to you; use the budget slider to see "
-             "which departures fit a limit you choose.")
-    t1, t2, t3, t4 = st.columns(4)
-    origin = t1.selectbox("From", NAMES, index=0)
-    dest = t2.selectbox("To", [n for n in NAMES if n != origin], index=1 if origin == "Bayurinda" else 0)
-    span_y = t3.select_slider("Departures over (Earth years)", [5, 10, 20], value=10)
-    which = t4.selectbox("Show", ["total", "vinf_dep", "vinf_arr"], format_func=lambda k: {"total": "Total", "vinf_dep": "Leaving only", "vinf_arr": "Arriving only"}[k])
+    st.subheader("Sternreyker flights")
+    st.write("A Sternreyker pilot keeps the vessel accelerating the whole way: speed up until halfway, then brake to stop at the "
+             "destination. There are no launch windows. What changes from day to day is how far apart the two planets are, "
+             "and whether Aureth is in the way. A Weltreyker gets the vessel airborne first; the flights below begin once the "
+             "wings are up, so add the launch and landing yourself with the overhead box.")
+    f1, f2, f3, f4, f5 = st.columns(5)
+    origin = f1.selectbox("From", NAMES, index=0)
+    dest = f2.selectbox("To", [n for n in NAMES if n != origin], index=1 if origin == "Bayurinda" else 0)
+    span_y = f3.select_slider("Departures over (Earth years)", [3, 10, 20], value=10)
+    keep = f4.slider("Stay away from Aureth by (AU)", 0.05, 0.6, 0.30, step=0.05,
+                     help="Closer than this the heat and gravity are too much. The Sun itself is only 0.005 AU in radius.")
+    over_h = f5.number_input("Launch + landing overhead (hours)", 0.0, 72.0, 0.0, step=1.0)
     O, Dst = BY[origin], BY[dest]
-    mu = K2 * STAR.mass_msun
-    syn = synodic_days(period_days(STAR, O), period_days(STAR, Dst))
-    h = hohmann(O.a_au, Dst.a_au, mu)
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Cheapest flight time (circular orbits)", f"{h['tof_days']:.0f} days", f"{h['tof_days'] / DAY:.0f} Bayurindan days", delta_color="off")
-    m2.metric("Speed change, leaving + arriving", f"{h['vinf_dep'] + h['vinf_arr']:.2f} km/s", f"{h['vinf_dep']:.2f} + {h['vinf_arr']:.2f}", delta_color="off")
-    m3.metric("Time between good windows", f"{syn / 365.25:.2f} years", f"{syn / DAY:.0f} Bayurindan days", delta_color="off")
-    m4.metric("Destination must lead by", f"{h['lead_deg']:.0f}°", "at departure", delta_color="off")
-    default_budget = round(1.3 * (h["vinf_dep"] + h["vinf_arr"]), 1)
-    budget = st.slider("Budget: total speed change you will allow (km/s)", 0.5, 20.0, float(default_budget), step=0.1, key=f"budget_{origin}_{dest}")
+    span_days = span_y * 365.25
+    G_NOV, G_EXP = 0.6, 1.4
+    g_mid = st.slider("Your own pilot's acceleration (g)", 0.3, 2.0, 1.0, step=0.1)
+    levels = {f"novice {G_NOV} g": G_NOV, f"your pilot {g_mid} g": g_mid, f"expert {G_EXP} g": G_EXP}
 
     @st.cache_data(show_spinner="Working out the flights...")
-    def get_porkchop(star: Star, o: Body, d: Body, span_days: float):
-        sy = synodic_days(period_days(star, o), period_days(star, d))
-        hh = hohmann(o.a_au, d.a_au, K2 * star.mass_msun)
-        dep = np.arange(-0.5 * sy, span_days + 0.5 * sy, 5.0)
-        tof = np.arange(0.4 * hh["tof_days"], 2.0 * hh["tof_days"], 5.0)
-        return porkchop(star, o, d, dep, tof)
+    def get_extremes(star: Star, bodies: tuple[Body, ...], span: float, keep_au: float):
+        out = {}
+        by = {b.name: b for b in bodies}
+        for o, d in (("Bayurinda", "Ashara"), ("Ashara", "Tarnic"), ("Bayurinda", "Tarnic")):
+            for g in (G_NOV, G_EXP):
+                out[(o, d, g)] = route_extremes(star, by[o], by[d], g, span, keep_au)
+        return out
 
-    span_days = span_y * 365.25
-    pc = get_porkchop(STAR, O, Dst, span_days)
-    wins = find_windows(pc, syn, 0, span_days, 14)
-    cap = max(12.0, 2.5 * (h["vinf_dep"] + h["vinf_arr"]))
-    st.plotly_chart(sp.porkchop_figure(pc, YEAR, wins, budget, cap, 0, span_days, key=which), width="stretch")
-    st.caption("Darker is cheaper. The dashed line marks your budget. Crosses mark the best departure in each window. "
-               "Dates count from the founding moment, when all the planets start in a line; that is close to a window for some routes and far from one for others.")
-    if wins:
-        out = []
-        for w in wins:
-            ls = launch_speed(O, w["vinf_dep"])
-            out.append({"Depart": when(w["dep_day"]), "Flight (Earth days)": round(w["tof_days"]),
-                        "Flight (Bayurindan days)": round(w["tof_days"] / DAY), "Arrive": when(w["dep_day"] + w["tof_days"]),
-                        "Leaving (km/s)": round(w["vinf_dep"], 2), "Arriving (km/s)": round(w["vinf_arr"], 2),
-                        "Total (km/s)": round(w["total"], 2), "Within budget": "yes" if w["total"] <= budget else "no",
-                        "Launch speed from the surface (km/s)": round(ls, 2) if ls else "unknown"})
-        st.dataframe(pd.DataFrame(out), hide_index=True, width="stretch")
-        st.caption("Launch speed from the surface = what it takes to escape the planet plus the 'leaving' speed, ignoring atmosphere and spin. "
-                   "Flights use exact two-body orbits for the planets and a single curved path between them.")
+    @st.cache_data(show_spinner="Scanning departure dates...")
+    def get_scan(star: Star, o: Body, d: Body, g: float, span: float, keep_au: float):
+        return scan_route(star, o, d, g, span, keep_au)
+
+    ext = get_extremes(STAR, tuple(BODIES), span_days, keep)
+    ov = over_h / 24
+    st.markdown("**Best and worst timing, every route** (days, including your overhead)")
+    rows = []
+    for (o, d) in (("Bayurinda", "Ashara"), ("Ashara", "Tarnic"), ("Bayurinda", "Tarnic")):
+        r1, r2 = ext[(o, d, G_NOV)], ext[(o, d, G_EXP)]
+        rows.append({"Route": f"{o} - {d}",
+                     f"Best, novice {G_NOV} g": round(r1["best_T"] + ov, 2), f"Best, expert {G_EXP} g": round(r2["best_T"] + ov, 2),
+                     f"Worst, novice {G_NOV} g": round(r1["worst_T"] + ov, 2), f"Worst, expert {G_EXP} g": round(r2["worst_T"] + ov, 2),
+                     "Planets closest (AU)": round(r1["best_dist"], 2), "Planets farthest (AU)": round(r1["worst_dist"], 2)})
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    st.caption("Best: the planets are on the same side of Aureth and as close as they get. Worst: on opposite sides, with Aureth between "
+               "them, so the pilot has to curve around it. Flights are straight and the Sun's pull is ignored except for the detours, "
+               "so allow about 2% either way. Top speeds are 1,300 to 2,300 km/s, under 1% of the speed of light.")
+
+    scans = {lab: get_scan(STAR, O, Dst, g, span_days, keep) for lab, g in levels.items()}
+    mid = scans[f"your pilot {g_mid} g"]
+    marks = {"best_t0": float(mid["t0"][mid["T"].argmin()]), "best_T": float(mid["T"].min()),
+             "worst_t0": float(mid["t0"][mid["T"].argmax()]), "worst_T": float(mid["T"].max())}
+    for sc in scans.values():
+        sc["T"] = sc["T"] + ov
+    marks["best_T"] += ov
+    marks["worst_T"] += ov
+    st.plotly_chart(sp.flight_figure(scans, YEAR, keep, marks), width="stretch")
+    blocked_share = float(mid["blocked"].mean())
+    st.caption(f"Orange bands: the straight line would pass within {keep:.2f} AU of Aureth ({blocked_share:.0%} of departures), "
+               "so the pilot curves around it. That adds about 2% at a 0.3 AU berth and more for a wider one (about 10% at 0.55 AU). The curves show straight-line times; "
+               "the table above includes the detour in the worst case. Markers are for your pilot.")
+
+    st.markdown(f"**Good days to leave** ({origin} to {dest}, your pilot {g_mid} g)")
+    syn = synodic_days(period_days(STAR, O), period_days(STAR, Dst))
+    T_ = mid["T"]
+    half = max(int(0.3 * syn), 1)
+    good = [i for i in range(half, len(T_) - half) if T_[i] <= T_[i - half:i + half + 1].min() + 1e-12]
+    if good:
+        st.dataframe(pd.DataFrame([{"Depart": when(float(mid["t0"][i])), "Flight (days)": round(float(T_[i]), 2),
+                                    "Flight (hours)": round(float(T_[i]) * 24), "Planets apart (AU)": round(float(mid["dist_au"][i]), 2),
+                                    "Top speed (km/s)": round(float(mid["v_peak_kms"][i]))} for i in good[:10]]),
+                     hide_index=True, width="stretch")
+        st.caption(f"The planets are closest again every {syn / 365.25:.2f} Earth years ({syn / DAY:.0f} Bayurindan days).")
+
+    with st.expander("For comparison: a ship that only coasts (no wings)"):
+        mu = K2 * STAR.mass_msun
+        h = hohmann(O.a_au, Dst.a_au, mu)
+
+        @st.cache_data(show_spinner="Working out the coasting flights...")
+        def get_porkchop(star: Star, o: Body, d: Body, span: float):
+            sy = synodic_days(period_days(star, o), period_days(star, d))
+            hh = hohmann(o.a_au, d.a_au, K2 * star.mass_msun)
+            dep = np.arange(-0.5 * sy, span + 0.5 * sy, 5.0)
+            tof = np.arange(0.4 * hh["tof_days"], 2.0 * hh["tof_days"], 5.0)
+            return porkchop(star, o, d, dep, tof)
+
+        pc = get_porkchop(STAR, O, Dst, span_days)
+        wins = find_windows(pc, syn, 0, span_days, 10)
+        st.write(f"Without wings, a ship coasts on a curved path: about {h['tof_days']:.0f} days at best, "
+                 f"with a window every {syn / 365.25:.1f} years, and it would need {h['vinf_dep'] + h['vinf_arr']:.1f} km/s of speed change.")
+        if wins:
+            st.dataframe(pd.DataFrame([{"Depart": when(w["dep_day"]), "Flight (days)": round(w["tof_days"]),
+                                        "Speed change (km/s)": round(w["total"], 2)} for w in wins]), hide_index=True, width="stretch")
 
 
 # ------------------------------------------------------------------ Stability
