@@ -13,7 +13,10 @@ from bajurinda.aureth import (
     AU_KM, COLORS, K2, Body, Star, all_positions, conjunction_minima, crossing_times, grand_alignments, load_system,
     nbody_track, pair_table, period_days, planet_table, sky_from, synodic_days,
 )
+from bajurinda.cycles import axial_precession, great_cycle, moon_cycles, orbit_secular, plane_cycle_years, planet_repeat
 from bajurinda.flights import route_extremes, scan_route
+from bajurinda.model import System, canon_planet
+from bajurinda.presets import DEFAULT_PRESET, PRESETS
 from bajurinda.transfers import find_windows, hohmann, porkchop
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -70,7 +73,7 @@ st.caption("Time is counted from the founding moment (the double full moon), whe
            "start in a line. Dates read 'year, day' in Bayurindan years of 440 solar days. Orbits are flat and coplanar "
            "(a placeholder), and Ashara's eccentricity and mass are placeholders.")
 
-tabs = st.tabs(["Orbits", "Cycles", "Sky from Bayurinda", "Transfers", "Stability"])
+tabs = st.tabs(["Orbits", "Cycles", "Sky from Bayurinda", "Transfers", "Long cycles", "Stability"])
 
 
 # ------------------------------------------------------------------ Orbits
@@ -262,8 +265,95 @@ with tabs[3]:
                                         "Speed change (km/s)": round(w["total"], 2)} for w in wins]), hide_index=True, width="stretch")
 
 
-# ------------------------------------------------------------------ Stability
+# ------------------------------------------------------------------ Long cycles
 with tabs[4]:
+    st.subheader("Longer cycles for Bayurinda")
+    st.write("Cycles of different lengths, from the moons' months up to the slow wobble of the planet's axis. Moons are the "
+             "selected Design B. Measuring takes about 20 seconds because it follows the moons for 250 years and the planets for 400,000.")
+    sig = tuple(BODIES)
+    if st.button("Measure the long cycles"):
+        with st.spinner("Following the moons and planets..."):
+            sysm = System(canon_planet(), (PRESETS[DEFAULT_PRESET][1], PRESETS[DEFAULT_PRESET][2]))
+            mc = moon_cycles(sysm)
+            pcy = plane_cycle_years(sysm)
+            rep = planet_repeat(STAR, BODIES)
+            als = grand_alignments(STAR, BODIES, 1000, 12)
+            gaps = np.diff([a["t"] for a in als]) / YEAR if len(als) > 1 else np.array([np.nan])
+            ax = axial_precession(sysm)
+            sec = orbit_secular(STAR, BODIES)
+            lw = mc["Liwaya"]
+            gc = great_cycle({"planets": rep["years"], "planes": pcy, "eclipses": lw["cycle_years"]}) if rep and pcy else None
+            st.session_state["sys_cycles"] = dict(sig=sig, mc=mc, plane=pcy, rep=rep, align=float(np.nanmean(gaps)), ax=ax, sec=sec, gc=gc)
+    cy = st.session_state.get("sys_cycles")
+    if cy is None:
+        st.info("Press the button to measure.")
+    else:
+        if cy["sig"] != sig:
+            st.warning("The planets have changed since this was measured. Press the button again.")
+        lw, nn = cy["mc"]["Liwaya"], cy["mc"]["Nineya"]
+        S_L, S_N = lw["synodic"], nn["synodic"]
+        q = round(S_L / S_N)
+        dbl = 1 / abs(1 / S_N - q / S_L) / YEAR
+        e_by = cy["sec"]["period_earth_years"] * 365.25 / YEAR
+        rows = [
+            dict(name="Eclipse seasons (twice per eclipse year)", years=lw["eclipse_year"] / YEAR, group="moons",
+                 what=f"The Sun passes Liwaya's orbital nodes every {lw['eclipse_year']:.0f} days", basis="measured"),
+            dict(name="Double-full moons", years=dbl, group="moons",
+                 what="Liwaya and Nineya are full together again", basis="measured"),
+            dict(name="Liwaya eclipse cycle", years=lw["cycle_years"], group="moons",
+                 what=f"{lw['cycle_months']} months = {lw['cycle_draconic']} node-to-node months = {lw['cycle_anomalistic']} "
+                      f"closest-to-closest months, matching to {lw['cycle_off_days']:.2f} days: eclipses repeat the same way",
+                 basis="measured"),
+            dict(name="Liwaya's orbit turns around", years=lw["node_regression_years"], group="moons",
+                 what="Its orbital nodes go once round the sky", basis="measured"),
+            dict(name="Grand alignments", years=cy["align"], group="planets",
+                 what="All three planets within 12 degrees, seen from Aureth (average gap)", basis="measured; Ashara is a placeholder"),
+            dict(name="Moons' planes line up", years=cy["plane"], group="moons",
+                 what="The two moons' orbital planes coincide; overlaps of the moons peak", basis="measured"),
+        ]
+        if cy["rep"]:
+            r = cy["rep"]
+            rows.append(dict(name="Whole planet system repeats", years=r["years"], group="planets",
+                             what=f"{r['ba']} Bayurinda-Ashara cycles = {r['bt']} Bayurinda-Tarnic = {r['at']} Ashara-Tarnic",
+                             basis="exact orbits; Ashara is a placeholder"))
+        if cy["gc"]:
+            g = cy["gc"]
+            rows.append(dict(name="THE GREAT CYCLE", years=g["years"], group="combined",
+                             what=f"{g['counts']['planets']} planet repeats = {g['counts']['planes']} moon-plane cycles = "
+                                  f"{g['counts']['eclipses']} eclipse cycles (agree to {g['spread'] * 100:.2f}%)",
+                             basis="combination of the three above"))
+        rows.append(dict(name="Axis wobble (precession)", years=cy["ax"]["years"], group="slow",
+                         what=f"The spin axis points at a new 'pole star'; the moons do {1 - cy['ax']['shares']['Aureth']:.0%} of the pulling",
+                         basis="formula; moment of inertia assumed (+-15%)"))
+        rows.append(dict(name="Orbit swells and shrinks", years=e_by, group="slow",
+                         what=f"Bayurinda's eccentricity runs {cy['sec']['e_min']:.3f} to {cy['sec']['e_max']:.3f} (small with these placeholders)",
+                         basis="N-body; depends on Ashara's placeholders"))
+        rows.sort(key=lambda r: r["years"])
+        for r in rows:
+            r["label"] = f"{r['years']:,.1f}" if r["years"] < 100 else f"{r['years']:,.0f}"
+        st.plotly_chart(sp.cycle_ladder_figure(rows), width="stretch")
+        st.dataframe(pd.DataFrame([{"Cycle": r["name"], "Bayurindan years": round(r["years"], 2 if r["years"] < 100 else 0),
+                                    "Earth years": round(r["years"] * YEAR / 365.25, 2 if r["years"] < 100 else 0),
+                                    "What happens": r["what"], "How it was found": r["basis"]} for r in rows]),
+                     hide_index=True, width="stretch")
+        if cy["gc"]:
+            g = cy["gc"]
+            st.markdown(f"**The Great Cycle, about {g['years']:.0f} Bayurindan years.** After this long the moons' planes, the planets' arrangement "
+                        "and Liwaya's eclipse pattern all return together. With this many cycles to combine, near-fits turn up by chance now and then, "
+                        "so treat it as a pleasing coincidence of the current numbers rather than a law. If you want it exact, "
+                        "Ashara's distance is the knob to turn.")
+        st.markdown("**Cycles of the star itself** are not computed here; Aureth's activity is a design choice. For scale, the Sun's magnetic "
+                    "cycle is 11 years (22 for its polarity), with slower swings near 90, 200 and 2,300 years.")
+        star_cycle = st.number_input("Aureth's activity cycle (Bayurindan years)", 3.0, 40.0, round(lw["cycle_years"], 2), step=0.1)
+        if cy["gc"]:
+            n = cy["gc"]["years"] / star_cycle
+            st.caption(f"{n:.2f} of those fit in the Great Cycle" + (" (a whole number)" if abs(n - round(n)) < 0.05 else "")
+                       + f"; one is {star_cycle / lw['cycle_years']:.2f} Liwaya eclipse cycles and {star_cycle / cy['plane']:.2f} moon-plane cycles. "
+                         "The default sets it equal to the eclipse cycle.")
+
+
+# ------------------------------------------------------------------ Stability
+with tabs[5]:
     st.subheader("Do the planets keep their orbits?")
     s1, s2 = st.columns(2)
     s_len = s1.select_slider("Years to simulate (Earth years)", [100, 1000, 10_000, 100_000], value=1000)

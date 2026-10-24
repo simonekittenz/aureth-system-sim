@@ -140,3 +140,15 @@ def flight_figure(scans: dict[str, dict], year_days: float, keep_au: float, mark
     fig.update_xaxes(title_text="Departure (Bayurindan years since the founding moment)", row=2, col=1)
     fig.update_layout(height=560, margin=dict(l=10, r=10, t=40, b=10), legend=dict(orientation="h", y=1.1))
     return fig
+
+
+def cycle_ladder_figure(rows: list[dict]) -> go.Figure:
+    colours = {"moons": "#4cc9f0", "planets": "#ffb703", "combined": "#f72585", "slow": "#90be6d"}
+    fig = go.Figure(go.Bar(
+        y=[r["name"] for r in rows], x=[r["years"] for r in rows], orientation="h",
+        marker_color=[colours[r["group"]] for r in rows], text=[r["label"] for r in rows], textposition="outside",
+        hovertemplate="%{y}<br>%{x:,.1f} Bayurindan years<extra></extra>"))
+    fig.update_xaxes(type="log", title="Bayurindan years (440 solar days each), logarithmic scale", range=[-0.2, 6.3])
+    fig.update_yaxes(autorange="reversed")
+    fig.update_layout(height=60 + 38 * len(rows), margin=dict(l=10, r=10, t=10, b=10), showlegend=False)
+    return fig

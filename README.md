@@ -26,7 +26,7 @@ A browser tab opens at http://localhost:8501. Keep the Terminal window open whil
 
 - **Bayurinda moons** (`moons.py`): Liwaya and Nineya, their phases, tides, calendar, eclipses and stability.
 - **Aureth system** (`system.py`): the star with Bayurinda, Ashara and Tarnic: orbits, cycles and alignments, Bayurinda's
-  sky, Sternreyker flight times between planets (constant acceleration, 0.6 to 1.4 g), and long-run stability. The other planets join once they have a distance.
+  sky, Sternreyker flight times between planets (constant acceleration, 0.6 to 1.4 g), a ladder of long cycles, and long-run stability. The other planets join once they have a distance.
 
 `app.py` is only the router between them.
 
@@ -42,6 +42,7 @@ A browser tab opens at http://localhost:8501. Keep the Terminal window open whil
 | `bajurinda/plots.py` | Plotly figures for the moons page |
 | `bajurinda/aureth.py` | The star and planets: loading `data/aureth.yaml`, orbits, N-body, sky from Bayurinda, alignments |
 | `bajurinda/flights.py` | Sternreyker flights: constant-acceleration flip-and-burn, Sun keep-out detours, best/worst timing |
+| `bajurinda/cycles.py` | Long cycles: eclipse cycles, node turns, plane cycle, planet repeats, the Great Cycle, axis precession |
 | `bajurinda/transfers.py` | Coasting comparison (no wings): Lambert solver, Hohmann baseline, window finder |
 | `bajurinda/system_plots.py` | Plotly figures for the system page |
 | `app.py`, `moons.py`, `system.py` | The UI: router and the two pages |
