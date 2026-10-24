@@ -11,6 +11,10 @@ import streamlit as st
 from bajurinda import plots
 from bajurinda.constants import M_EARTH, M_SUN, YEAR_DAYS
 from bajurinda.eclipses import SITE_ANNULAR, SITE_PARTIAL, SITE_TOTAL, eclipse_events, site_eclipse_types, site_rates, summarise
+from bajurinda.cycles import axial_precession, moon_cycles
+from bajurinda.landmarks import (
+    moon_declination_envelope, rise_offset_deg, return_cycles, star_alignment_life, sun_markers,
+)
 from bajurinda.eras import era_bands, era_summary, eras_data
 from bajurinda.lunar_calendar import build_calendar
 from bajurinda.dynamics import integrate, mean_rates, phase_ensemble, stability_run
@@ -148,7 +152,7 @@ rates = get_rates(system)
 report_system = System(planet, tuple(replace(m, a_km=d) for m, d in zip(system.moons, rates["distance"])))
 report = system_report(report_system)
 
-tabs = st.tabs(["Overview", "Orbits", "Phases & sky", "Tides", "Alignments", "Calendar", "Eras", "Eclipses", "Stability", "Method & caveats"])
+tabs = st.tabs(["Overview", "Orbits", "Phases & sky", "Tides", "Alignments", "Calendar", "Eras", "Eclipses", "Landmarks", "Stability", "Method & caveats"])
 
 # ------------------------------------------------------------------ Overview
 with tabs[0]:
@@ -491,8 +495,87 @@ with tabs[7]:
         st.dataframe(pd.DataFrame([{"Year": round(e[1] / planet.local_day_days / planet.year_solar_days, 2), "Moon": names[e[0]], "Type": TYPE[t_]}
                                    for e, t_ in seen[:40]]), hide_index=True, width="stretch", height=300)
 
-# ------------------------------------------------------------------ Stability
+# ------------------------------------------------------------------ Landmarks
 with tabs[8]:
+    st.subheader("Sky landmarks")
+    st.write("A monument can mark where something rises on the horizon, and the bodies come back to the same marks on a schedule. "
+             f"Directions below are for a flat horizon at **latitude {lat}°** (change it in the sidebar), in degrees north (+) or south (-) of due east. "
+             "Refraction and the size of the discs are ignored; Nineya is close enough that where you stand on the planet shifts it by up to 2.3°.")
+
+    st.markdown("**The Sun**")
+    sm = sun_markers(system)
+    off = rise_offset_deg(sm["max_dec"], lat)
+    rows = [("Northern winter solstice", sm["north_winter_day"], sm["min_dec"]), ("Spring equinox", sm["spring_equinox_day"], 0.0),
+            ("Northern summer solstice", sm["north_summer_day"], sm["max_dec"]), ("Autumn equinox", sm["autumn_equinox_day"], 0.0)]
+    st.dataframe(pd.DataFrame([{"Event": n, f"Day of the {sm['year_days_solar']:.0f}-day year": round(d), "Sun's declination": f"{dec:+.1f}°",
+                                "Sunrise (° from east)": (f"{rise_offset_deg(dec, lat):+.1f}" if rise_offset_deg(dec, lat) is not None else "never rises / sets")}
+                               for n, d, dec in rows]), hide_index=True, width="stretch")
+    st.caption("The seasons are not equal because the orbit is slightly oval. Which way the axis leans relative to the closest point to Aureth is not settled; "
+               "here the founding moment is a northern winter solstice and the closest approach together.")
+
+    st.markdown("**The moons: standstills**")
+    st.write("Each month a moon swings between a highest and a lowest point in the sky. Over the years that swing grows and shrinks; "
+             "the extremes are the *standstills*, when the moon rises at its farthest point along the horizon (major) or its nearest (minor).")
+
+    @st.cache_data(show_spinner="Following the moons for 130 years...")
+    def get_envelope(system: System):
+        return moon_declination_envelope(system)
+
+    env = get_envelope(system)
+    st.plotly_chart(plots.standstill_figure(env, planet.year_days), width="stretch")
+    srows = []
+    for nm, v in env.items():
+        for kind, key in (("major", "major"), ("minor", "minor")):
+            for y_, amp in v[key][:4]:
+                ro = rise_offset_deg(amp, lat)
+                srows.append({"Moon": nm, "Standstill": kind, "Year": round(y_, 1), "Highest it climbs (declination)": f"{amp:.1f}°",
+                              "Rises (° from east, at its extreme)": f"{ro:+.1f}" if ro is not None else "-"})
+    srows.sort(key=lambda r: (r["Moon"], r["Year"]))
+    st.dataframe(pd.DataFrame(srows), hide_index=True, width="stretch", height=300)
+    lw = env["Liwaya"]
+    st.caption(f"Liwaya stays within {lw['range'][0]:.1f}° to {lw['range'][1]:.1f}° and its major standstills come about every 19 years, so a gate aimed at its "
+               f"most northerly moonrise is lit again each time. Nineya swings between {env['Nineya']['range'][0]:.0f}° and {env['Nineya']['range'][1]:.0f}°, "
+               "and how far it goes follows the 52-year cycle of the moons' orbital planes.")
+
+    st.markdown("**When the whole sky comes back**")
+    st.write("A moon is in the same place at the same hour on the same date again only when several cycles line up at once.")
+    if st.button("Measure the return cycles (about 10 seconds)"):
+        with st.spinner("Following the moons for 250 years..."):
+            st.session_state["moon_returns"] = (system, moon_cycles(system))
+    saved = st.session_state.get("moon_returns")
+    if saved:
+        if saved[0] != system:
+            st.warning("The settings have changed since this was measured. Press the button again.")
+        mcs = saved[1]
+        label = {"calendar": "Same phase, same hour, same date in the year",
+                 "eclipse": "Same phase, same height in the sky (node), same distance",
+                 "sky": "All of these together, within about a day"}
+        rr = []
+        for nm in ("Liwaya", "Nineya"):
+            res = return_cycles(mcs, planet.local_day_days, planet.year_days, nm)
+            for prof, lst in res.items():
+                for x in lst[:3]:
+                    rr.append({"Moon": nm, "What repeats": label[prof], "Months": x["months"], "Bayurindan years": round(x["years"], 2),
+                               "Node off (days)": round(x["node"], 2), "Distance off (days)": round(x["dist"], 2),
+                               "Hour off (h)": round(x["hour"], 1), "Date off (days)": round(x["date"], 1)})
+        st.dataframe(pd.DataFrame(rr), hide_index=True, width="stretch", height=380)
+        st.caption("'Off' columns show how far each ingredient misses after that many whole months (small is good). The node and distance misses are "
+                   "uncertain by a few tenths of a day, and real months wander by a few tenths too.")
+
+    st.markdown("**Fixed stars**")
+    ap = axial_precession(system)
+    sl = star_alignment_life(ap["years"], planet.obliquity_deg)
+    st.write(f"The spin axis wobbles round once in about {ap['years']:,.0f} Bayurindan years, so a star's rising point slowly creeps. "
+             f"At worst it moves {sl['per_century']:.2f}° per century (stars crossing the sky at 0 or 12 hours of right ascension), "
+             "and not at all for stars at 6 or 18 hours.")
+    st.dataframe(pd.DataFrame([{"A marker is good to": f"{tol}°" + (" (half a moon's width)" if tol == 0.25 else ""),
+                                "Stays aligned for (worst case)": f"{yrs:.0f} years"} for tol, yrs in sl["years_to_drift"].items()]),
+                 hide_index=True, width="stretch")
+    st.caption("Alignments to the Sun's solstices and to Liwaya's standstills do not creep this way, because the moons hold the planet's tilt steady.")
+
+
+# ------------------------------------------------------------------ Stability
+with tabs[9]:
     st.subheader("Orbital stability")
     st.write("N-body integration of star + planet + both moons. A single run is not conclusive: this system "
              "can be stable for some starting phases and not others. Use the phase ensemble before trusting a configuration.")
@@ -537,7 +620,7 @@ with tabs[8]:
             st.caption("Losses at (years): " + ", ".join(f"{y:.0f}" for y in lost))
 
 # ------------------------------------------------------------------ Method
-with tabs[9]:
+with tabs[10]:
     st.markdown("""
 **Status labels** used throughout: *canon* (your established worldbuilding), *derived* (calculated from canon),
 *hypothetical* (a design choice, such as anything about the moons), and *validated* (checked by simulation, within the stated limits).

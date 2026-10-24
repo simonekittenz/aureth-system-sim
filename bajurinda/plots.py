@@ -252,3 +252,15 @@ def eclipse_figure(events: list[dict], names: tuple[str, str], years: float) -> 
                       xaxis=dict(title="Bajurindan years", range=[0, years]),
                       yaxis=dict(tickmode="array", tickvals=list(range(4)), ticktext=labels, autorange="reversed"))
     return fig
+
+
+def standstill_figure(env: dict, year_days: float, major_minor: bool = True) -> go.Figure:
+    fig = go.Figure()
+    for name, v in env.items():
+        fig.add_trace(go.Scatter(x=v["t"] / year_days, y=v["amp"], name=name, mode="lines", line=dict(color=COL[name], width=2),
+                                 hovertemplate=f"{name}<br>year %{{x:.1f}}: %{{y:.1f}} deg<extra></extra>"))
+    fig.add_hline(y=16, line=dict(color="#ffb703", dash="dot", width=1), annotation_text="the Sun at the solstices (16 deg)",
+                  annotation_position="top left")
+    fig.update_layout(height=340, margin=dict(l=10, r=10, t=10, b=10), legend=dict(orientation="h", y=1.12),
+                      xaxis_title="Bayurindan years since the founding moment", yaxis_title="Highest point reached each month (declination, deg)")
+    return fig

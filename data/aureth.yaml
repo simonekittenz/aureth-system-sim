@@ -34,6 +34,18 @@ long_cycles:
   orbit_eccentricity_cycle: {years: 172000, note: "eccentricity 0.038 to 0.043 only, with the placeholder Ashara"}
   star_activity_cycle: {status: undecided, note: "not computed; the Sun's is 11 years"}
 
+# Landmark timings (Bayurindan years of 440 solar days, measured; see the Landmarks tab).
+landmarks:
+  status: measured
+  sun: {winter_solstice_day: 0, spring_equinox_day: 104, summer_solstice_day: 220, autumn_equinox_day: 335,
+        note: "the direction the axis leans relative to perihelion is a free choice; the founding moment is set as a northern winter solstice at perihelion"}
+  liwaya_declination_range_deg: [14.5, 17.5]       # obliquity 16 +- its 1.5 degree tilt
+  liwaya_major_standstill_every_years: 19
+  nineya_declination_range_deg: [9, 23]            # swings with the 52.7-year plane cycle
+  calendar_repeat: "7 years = 80 Liwaya months exactly (38.5-day months, 440-day years): same phase, hour and date"
+  eclipse_repeat_years: 14.26                      # same phase, node and distance, but 91 days off in the year
+  axis_wobble_years: 12336                         # a fixed star's rising point creeps up to 0.8 degrees per century
+
 # Interplanetary flight (lore from the author's worldbuilding discussions, not yet in the world files).
 # A Weltreyker launches the vessel; once airborne and "nearing", a Sternreyker pilot's ethereal aspect wings change the
 # vessel's velocity continuously. Acceleration depends on the pilot; there are no launch windows.

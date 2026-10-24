@@ -42,6 +42,7 @@ A browser tab opens at http://localhost:8501. Keep the Terminal window open whil
 | `bajurinda/plots.py` | Plotly figures for the moons page |
 | `bajurinda/aureth.py` | The star and planets: loading `data/aureth.yaml`, orbits, N-body, sky from Bayurinda, alignments |
 | `bajurinda/flights.py` | Sternreyker flights: constant-acceleration flip-and-burn, Sun keep-out detours, best/worst timing |
+| `bajurinda/landmarks.py` | Horizon alignments: solstice sunrises, moon standstills, return cycles, star drift |
 | `bajurinda/cycles.py` | Long cycles: eclipse cycles, node turns, plane cycle, planet repeats, the Great Cycle, axis precession |
 | `bajurinda/transfers.py` | Coasting comparison (no wings): Lambert solver, Hohmann baseline, window finder |
 | `bajurinda/system_plots.py` | Plotly figures for the system page |
@@ -56,6 +57,11 @@ runs of double-full and double-new moons marked. Month and week names and struct
 
 A long-run timeline (70-300 years) of how often the two moons overlap, the angle between their orbital planes,
 and where the double-full and double-new months fall. Gold bands mark the stretches when the planes are aligned.
+
+## Landmarks tab
+
+Where the Sun and each moon rise on the horizon at a chosen latitude, the moons' standstills (extreme rising points), cycles after
+which the same phase, hour, height and date return, and how long an alignment to a fixed star stays true.
 
 ## Eclipses tab
 
@@ -94,6 +100,11 @@ runs of double-full and double-new moons marked. Month and week names and struct
 
 A long-run timeline (70-300 years) of how often the two moons overlap, the angle between their orbital planes,
 and where the double-full and double-new months fall. Gold bands mark the stretches when the planes are aligned.
+
+## Landmarks tab
+
+Where the Sun and each moon rise on the horizon at a chosen latitude, the moons' standstills (extreme rising points), cycles after
+which the same phase, hour, height and date return, and how long an alignment to a fixed star stays true.
 
 ## Eclipses tab
 
