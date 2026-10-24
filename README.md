@@ -63,7 +63,8 @@ and where the double-full and double-new months fall. Gold bands mark the stretc
 The sky from a chosen latitude, longitude and local time: Aureth, both moons with their true phases, Ashara and Tarnic, the
 horizon with compass points, a set of named bright stars and a Milky Way. The stars and the galaxy's shape come from
 the `sky` section of `data/aureth.yaml` and are all placeholders: rename and move them freely. A panorama or an all-sky dome, with a
-Play button that runs a time-lapse. You choose the start, the time between frames (5 minutes to 10 days), how long it plays
+Play button that runs a time-lapse. The picture sits at the top of the tab, its height is a setting (up to 1500 px), and the
+full-screen button at its top right goes larger still. You choose the start, the time between frames (5 minutes to 10 days), how long it plays
 (an hour to four years) and the speed. The founding moment is the default view.
 
 ### Editing the sky

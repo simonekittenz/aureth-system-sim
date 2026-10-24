@@ -69,7 +69,7 @@ for _k, _v in ss.get("_moons_saved", {}).items():
     if _k not in ss:
         ss[_k] = _v
 for _k, _v in {"v_window": 240, "v_step": 3, "v_lat": 10, "v_lon": 0, "v_unit": "Earth days", "v_sky_year": 1, "v_sky_day": 1,
-               "v_sky_clock": 0.0, "v_sky_view": "Panorama", "v_sky_fov": 360, "v_sky_look": "Liwaya", "v_sky_scale": 12,
+               "v_sky_clock": 0.0, "v_sky_view": "Panorama", "v_sky_fov": 180, "v_sky_height": 860, "v_sky_look": "Liwaya", "v_sky_scale": 12,
                "v_sky_named": True, "v_sky_mw": True, "v_sky_faint": True, "v_sky_seed": load_faint_settings()["seed"], "v_sky_step": "30 minutes", "v_sky_span": "1 day", "v_sky_ms": 140}.items():
     if _k not in ss:
         ss[_k] = _v
@@ -630,6 +630,8 @@ with tabs[9]:
     def jump_founding():
         st.session_state.update({"v_sky_year": 1, "v_sky_day": 1, "v_sky_clock": 0.0})
 
+    sky_box = st.container()          # the picture goes here, above the settings, and is filled in once the settings are known
+    st.markdown("**Settings**")
     year_len = planet.year_solar_days
     moon_month = float(max(rates["synodic"])) / planet.local_day_days
     STEPS = {"5 minutes": 5 / 60, "15 minutes": 0.25, "30 minutes": 0.5, "1 hour": 1.0, "3 hours": 3.0, "1 day": 19.0,
@@ -648,15 +650,18 @@ with tabs[9]:
     step_label = p1.select_slider("Time between frames", list(STEPS), key="v_sky_step")
     span_label = p2.select_slider("Play for", list(SPANS), key="v_sky_span")
     frame_ms = p3.slider("Pause between frames (milliseconds)", 20, 1000, step=10, key="v_sky_ms", help="Smaller is faster.")
-    v1, v2, v3, v4 = st.columns([1.3, 1.2, 1.3, 1.5])
+    v1, v2, v3, v4, v5 = st.columns([1.2, 1.2, 1.3, 1.4, 1.4])
     view = v1.radio("View", ["Panorama", "All-sky dome"], key="v_sky_view", horizontal=True,
                     help="Panorama: the horizon laid out flat. Dome: looking straight up, north at the top, east on the left.")
-    fov = v2.select_slider("Panorama width (degrees)", [360, 180, 90, 45], key="v_sky_fov")
+    fov = v2.select_slider("Panorama width (degrees)", [360, 180, 90, 45], key="v_sky_fov",
+                           help="360 shows the whole horizon in one wide, short strip. 180 or less gives a taller, bigger picture.")
     look_choices = ["Liwaya", "Nineya", "Aureth", "Ashara", "Tarnic"] + [st_.name for st_ in load_sky()[0]] + ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
     if ss["v_sky_look"] not in look_choices:
         ss["v_sky_look"] = "Liwaya"
     look = v3.selectbox("Look toward", look_choices, key="v_sky_look")
     scale = v4.slider("Draw the Sun and moons larger by", 1, 40, key="v_sky_scale", help="1 is true size: the discs are about half a degree across.")
+    sky_h = v5.slider("Picture height (pixels)", 450, 1500, step=50, key="v_sky_height",
+                      help="Bigger is easier to see. The full-screen button at the top right of the picture goes even larger.")
     t1, t2, t3, _ = st.columns([1, 1, 1, 2])
     named_on = t1.checkbox("Named stars", key="v_sky_named", help="The bright stars from the sky section of data/aureth.yaml. Names and positions are placeholders.")
     mw_on = t2.checkbox("Milky Way", key="v_sky_mw", help="Built from the galaxy's pole, centre and width in data/aureth.yaml.")
@@ -680,10 +685,13 @@ with tabs[9]:
     ref = sky if (abs(span_h - 19.0) < 1e-9 and abs(step_h - 0.5) < 1e-9) else get_sky(system, float(lat), float(lon), float(day_total), start_h, 19.0, 0.5)
     compass = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SW": 225, "W": 270, "NW": 315}
     center = float(compass[look]) if look in compass else find_sight(sky, look, 0)
-    st.plotly_chart(sky_figure(sky, "dome" if view == "All-sky dome" else "panorama", center, float(fov), float(scale), named_on, 0, ref, int(frame_ms), mw_on, faint_on, int(ss["v_sky_seed"])),
-                    width="stretch")
-    st.caption(f"{len(sky.clock)} frames from {sky.labels[0]} to {sky.labels[-1]}. Press Play or drag the slider under the picture. "
-               "The table and the dotted paths describe the first moment and the 19 hours after it. Faded objects are below the horizon; "
+    with sky_box:
+        st.plotly_chart(sky_figure(sky, "dome" if view == "All-sky dome" else "panorama", center, float(fov), float(scale), named_on, 0, ref,
+                                   int(frame_ms), mw_on, faint_on, int(ss["v_sky_seed"]), int(sky_h)),
+                        width="stretch", config={"displaylogo": False, "toImageButtonOptions": {"width": 1920, "height": 1080, "scale": 1}})
+        st.caption(f"{len(sky.clock)} frames from {sky.labels[0]} to {sky.labels[-1]}. Press Play or drag the slider under the picture. "
+                   "Hover over the picture and use the arrows at its top right to go full screen.")
+    st.caption("The table and the dotted paths describe the first moment and the 19 hours after it. Faded objects are below the horizon; "
                "the bright side of each moon faces Aureth. Nineya is close enough that where you stand shifts it against the sky. "
                "The stars and the Milky Way are placeholders you can edit in data/aureth.yaml.")
     st.dataframe(pd.DataFrame(readout(sky, 0, ref)), hide_index=True, width="stretch")

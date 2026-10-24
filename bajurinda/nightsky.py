@@ -372,7 +372,7 @@ def _faint(seed: int | None):
 
 def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov: float = 360.0, scale: float = 10.0,
                named: bool = True, start_index: int = 0, ref: SkyData | None = None, frame_ms: int = 140,
-               milky_way: bool = True, faint: bool = True, faint_seed: int | None = None) -> go.Figure:
+               milky_way: bool = True, faint: bool = True, faint_seed: int | None = None, height: int = 0) -> go.Figure:
     proj = Projection(view, center_az)
     ref = ref or d
     opts = {"named": named, "milky_way": milky_way, "faint": faint, "seed": faint_seed}
@@ -402,8 +402,10 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
     # ground, grid, compass
     if view == "dome":
         a = np.linspace(0, 2 * np.pi, 180)
-        ring_x = np.concatenate([300 * np.cos(a), 90 * np.cos(a[::-1])]); ring_y = np.concatenate([300 * np.sin(a), 90 * np.sin(a[::-1])])
+        ring_x = np.concatenate([110 * np.cos(a), 90 * np.cos(a[::-1])]); ring_y = np.concatenate([110 * np.sin(a), 90 * np.sin(a[::-1])])
         fig.add_trace(go.Scatter(x=list(ring_x), y=list(ring_y), fill="toself", mode="lines", fillcolor="rgb(30,26,24)", line=dict(width=0), hoverinfo="skip", showlegend=False))
+        mask_x = np.concatenate([320 * np.cos(a), 110 * np.cos(a[::-1])]); mask_y = np.concatenate([320 * np.sin(a), 110 * np.sin(a[::-1])])
+        fig.add_trace(go.Scatter(x=list(mask_x), y=list(mask_y), fill="toself", mode="lines", fillcolor="rgb(10,12,20)", line=dict(width=0), hoverinfo="skip", showlegend=False))
         gx, gy = [], []
         for alt in (30, 60):
             r = 90 - alt
@@ -479,12 +481,12 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
     fig.frames = frames
 
     if view == "dome":
-        xr, yr, h = [-122, 122], [-122, 122], 700
+        xr, yr, h = [-108, 108], [-108, 108], height or 700
     else:
         half = fov / 2
         xr = [-half, half]
-        yr = [-22, min(95, 10 + 0.62 * fov)] if fov < 360 else [-22, 92]
-        h = 470
+        yr = [-12, min(92, 10 + 0.62 * fov)] if fov < 360 else [-12, 90]
+        h = height or 470
     tv = list(range(-180, 181, 30)) if fov >= 180 else list(range(-180, 181, 15))
     fig.update_xaxes(range=xr, showgrid=False, zeroline=False, visible=(view != "dome"), scaleanchor="y", constrain="domain",
                      tickvals=tv, ticktext=[f"{int((center_az + v) % 360)}°" for v in tv])
@@ -493,8 +495,8 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
     steps = [dict(label=(d.labels[i] if i % every == 0 else ""), method="animate",
                   args=[[f.name], dict(mode="immediate", frame=dict(duration=0, redraw=True))]) for i, f in enumerate(frames)]
     fig.update_layout(
-        height=h, margin=dict(l=10, r=10, t=10, b=10), plot_bgcolor="rgb(10,12,20)", paper_bgcolor="rgba(0,0,0,0)",
-        updatemenus=[dict(type="buttons", direction="left", x=0.0, y=-0.12, buttons=[
+        height=h, margin=dict(l=10, r=10, t=44, b=10), plot_bgcolor="rgb(10,12,20)", paper_bgcolor="rgba(0,0,0,0)",
+        updatemenus=[dict(type="buttons", direction="left", x=0.0, y=1.0, yanchor="bottom", buttons=[
             dict(label="Play", method="animate", args=[None, dict(frame=dict(duration=int(frame_ms), redraw=True), fromcurrent=True)]),
             dict(label="Pause", method="animate", args=[[None], dict(frame=dict(duration=0, redraw=False), mode="immediate")])])],
         sliders=[dict(active=start_index, currentvalue=dict(prefix="", font=dict(size=14)), pad=dict(t=30), steps=steps)])
