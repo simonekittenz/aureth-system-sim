@@ -104,10 +104,14 @@ sky:
     - {name: "Coal Pearl",     lon:   7.0, lat:  28.0, mag:  2.0, color: "#ffc8a8", label: true}
     - {name: "Morning Nail",   lon:  40.0, lat:  18.0, mag:  1.8, color: "#fff2d2", label: true}
     - {name: "Hollow Tooth",   lon:  70.0, lat:  32.0, mag:  2.2, color: "#eaf1ff", label: false}
+    - {name: "S1",             lon:  54.2, lat: -53.1, mag:  1.0, color: "#ffffff", label: true}
+    - {name: "S2",             lon:  60.9, lat: -61.5, mag:  1.0, color: "#ffffff", label: true}
+    - {name: "S3",             lon:  42.1, lat: -71.7, mag:  1.0, color: "#ffffff", label: true}
+    - {name: "S4",             lon:  32.7, lat: -83.6, mag:  1.0, color: "#ffffff", label: true}
   faint_stars:                       # the dim background stars are generated, not listed; the same seed always gives the same sky
     seed: 5
     count_along_galaxy: 380
-    count_elsewhere: 160
+    count_elsewhere: 200
   milky_way:
     pole: {lon: 215.0, lat: 28.0}   # the pole of the galaxy's plane; the band is the great circle 90 degrees from it
     centre_lon: 258.0               # ecliptic longitude toward the galaxy's bright centre (projected onto the plane)
