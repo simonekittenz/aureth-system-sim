@@ -10,6 +10,7 @@ from .aureth import COLORS, load_system, state
 from .dynamics import build_simulation
 from .model import System, angular_diameter_deg
 from .sky import illuminated_fraction, phase_disc, spin_axis, surface_normal
+from .starfield import band_edges, circle_on_sky, ecl_vec, faint_stars, load_sky
 
 SKY_STOPS = [(10, (122, 184, 255)), (3, (240, 170, 120)), (0, (224, 140, 100)), (-6, (61, 79, 143)),
              (-12, (29, 39, 80)), (-18, (7, 11, 26))]
@@ -39,15 +40,6 @@ def twilight_name(sun_alt: float) -> str:
     if sun_alt > -18:
         return "astronomical twilight"
     return "night"
-
-
-def star_field(n: int = 380, seed: int = 11) -> tuple[np.ndarray, np.ndarray]:
-    """Decorative background stars (not canon): random directions and sizes, fixed in inertial space."""
-    rng = np.random.default_rng(seed)
-    v = rng.normal(size=(n, 3))
-    v /= np.linalg.norm(v, axis=1, keepdims=True)
-    size = 1.2 + 3.2 * rng.random(n) ** 7
-    return v, size
 
 
 def moons_at(system: System, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -80,9 +72,9 @@ class SkyData:
     sun: dict                       # alt, az (deg), rad (deg), probe (alt, az) for nothing
     moons: dict                     # name -> dict(alt, az, rad, k, limb_alt, limb_az, dist_km)
     planets: dict                   # name -> dict(alt, az)
-    stars_alt: np.ndarray           # (frames, nstars)
-    stars_az: np.ndarray
-    star_size: np.ndarray
+    U: np.ndarray                   # local frame at each frame: up, east, north (inertial unit vectors)
+    E: np.ndarray
+    N: np.ndarray
     lat: float
     lon: float
 
@@ -148,14 +140,7 @@ def compute_sky(system: System, lat: float, lon: float, day_total: float, start_
         a_, z_ = _altaz(v, U, E, N)
         planets[b.name] = {"alt": a_, "az": z_}
 
-    sv, ssize = star_field()
-    st_alt = np.zeros((len(t), len(sv)))
-    st_az = np.zeros_like(st_alt)
-    for i in range(len(t)):
-        a_ = np.degrees(np.arcsin(np.clip(sv @ U[i], -1, 1)))
-        z_ = np.degrees(np.arctan2(sv @ E[i], sv @ N[i])) % 360
-        st_alt[i], st_az[i] = a_, z_
-    return SkyData(t, clock, labels, sun, moons, planets, st_alt, st_az, ssize, lat, lon)
+    return SkyData(t, clock, labels, sun, moons, planets, U, E, N, lat, lon)
 
 
 # ------------------------------------------------------------------ drawing
@@ -192,64 +177,180 @@ def _rgba(rgb, a):
     return f"rgba({rgb[0]},{rgb[1]},{rgb[2]},{a})"
 
 
-def _frame_traces(d: SkyData, i: int, proj: Projection, scale: float, show_stars: bool):
+def _vis(sun_alt: float, mag: float) -> float:
+    """How visible a star of magnitude `mag` is when the Sun is at `sun_alt`: bright stars show in twilight, faint ones need real dark."""
+    return float(max(0.0, min(1.0, (-sun_alt - (4.0 + 2.5 * mag)) / 6.0)))
+
+
+def _poly(x, y, view):
+    """Cut a closed outline at the panorama's wrap-around seam so no streaks cross the picture."""
+    if view == "dome":
+        return list(x), list(y)
+    ox, oy, run = [], [], []
+    for q in range(len(x)):
+        if run and abs(x[q] - x[run[-1]]) > 120:
+            if len(run) > 1:
+                ox += [x[r] for r in run] + [None]; oy += [y[r] for r in run] + [None]
+            run = []
+        run.append(q)
+    if len(run) > 1:
+        ox += [x[r] for r in run] + [None]; oy += [y[r] for r in run] + [None]
+    return ox, oy
+
+
+def _band_centre(mw, d, i, proj, n=96):
+    """The galaxy's centre line projected on the picture, and its half-width in degrees at each point."""
+    from .starfield import mw_basis, half_width
+    C, E2, P = mw_basis(mw)
+    l = np.linspace(0, 360, n + 1)
+    u = np.cos(np.radians(l))[:, None] * C + np.sin(np.radians(l))[:, None] * E2
+    U, E, N = d.U[i], d.E[i], d.N[i]
+    alt, az = _altaz(u, np.broadcast_to(U, u.shape), np.broadcast_to(E, u.shape), np.broadcast_to(N, u.shape))
+    x, y = proj.xy(alt, az)
+    return np.asarray(x, float), np.asarray(y, float), half_width(l, mw), l
+
+
+def _ribbon_screen(x, y, w, scale, view, l0=None, l1=None, l=None):
+    """A ribbon of half-width scale*w drawn around the line (x, y), in picture degrees. Returns closed pieces."""
+    ox, oy = [], []
+    n = len(x)
+    start = 0
+    for q in range(1, n + 1):
+        cut = q == n or (view != "dome" and abs(x[q] - x[q - 1]) > 60)
+        if not cut:
+            continue
+        seg = np.arange(start, q)
+        start = q
+        if len(seg) < 3:
+            continue
+        if l0 is not None:
+            ll = l[seg]
+            inside = ((ll - l0) % 360) <= ((l1 - l0) % 360)
+            if inside.sum() < 3:
+                continue
+            seg = seg[inside]
+        sx, sy = x[seg], y[seg]
+        tx, ty = np.gradient(sx), np.gradient(sy)
+        norm = np.hypot(tx, ty)
+        norm[norm == 0] = 1.0
+        nx, ny = -ty / norm, tx / norm
+        hw = w[seg] * scale
+        px = list(sx + nx * hw) + list((sx - nx * hw)[::-1]) + [float(sx[0] + nx[0] * hw[0])]
+        py = list(sy + ny * hw) + list((sy - ny * hw)[::-1]) + [float(sy[0] + ny[0] * hw[0])]
+        ox += px + [None]
+        oy += py + [None]
+    return ox, oy
+
+
+MW_LAYERS = tuple((f"mw_{k}", sc, col) for k, (sc, col) in enumerate((
+    (2.3, "rgba(140,165,250,0.030)"), (1.85, "rgba(160,182,252,0.034)"), (1.5, "rgba(185,200,255,0.038)"),
+    (1.2, "rgba(210,220,255,0.044)"), (0.9, "rgba(235,236,255,0.052)"), (0.6, "rgba(255,244,222,0.065)"))))
+
+
+def _frame_traces(d: SkyData, i: int, proj: Projection, scale: float, opts: dict):
     view = proj.view
     sun_alt = float(d.sun["alt"][i])
     sky = _rgba(sky_rgb(sun_alt), 1.0)
     traces = {}
     if view == "dome":
         a = np.linspace(0, 2 * np.pi, 120)
-        traces[0] = dict(x=list(90 * np.cos(a)), y=list(90 * np.sin(a)), fillcolor=sky)
+        traces["sky"] = dict(x=list(90 * np.cos(a)), y=list(90 * np.sin(a)), fillcolor=sky)
     else:
-        traces[0] = dict(x=[-540, 540, 540, -540, -540], y=[0, 0, 120, 120, 0], fillcolor=sky)
+        traces["sky"] = dict(x=[-540, 540, 540, -540, -540], y=[0, 0, 120, 120, 0], fillcolor=sky)
+    U, E, N = d.U[i], d.E[i], d.N[i]
+    stars, mw = load_sky()
 
-    vis = max(0.0, min(1.0, (-sun_alt - 3) / 12))
-    if show_stars and vis > 0:
-        up = d.stars_alt[i] > 0
-        x, y = proj.xy(d.stars_alt[i][up], d.stars_az[i][up])
-        traces[1] = dict(x=list(x), y=list(y), marker=dict(size=list(d.star_size[up]), color="white", opacity=vis * 0.85))
+    # the galaxy
+    mw_vis = max(0.0, min(1.0, (-sun_alt - 14) / 6)) * mw.brightness if opts["milky_way"] else 0.0
+    if mw_vis > 0:
+        cx_, cy_, wv, lv = _band_centre(mw, d, i, proj)
+        for key, sc, _ in MW_LAYERS:
+            x, y = _ribbon_screen(cx_, cy_, wv, sc, view)
+            traces[key] = dict(x=x, y=y, opacity=mw_vis)
+        x, y = _ribbon_screen(cx_, cy_, wv, 0.1, view, mw.rift_from, mw.rift_to, lv)
+        traces["mw_rift"] = dict(x=x, y=y, opacity=mw_vis * mw.rift_strength)
+        bx, by, dx, dy = [], [], [], []
+        for lon_, lat_, size_, strength in mw.patches:
+            for frac in (1.0, 0.55):
+                circ = circle_on_sky(lon_, lat_, size_ * frac)
+                alt_, az_ = _altaz(circ, np.broadcast_to(U, circ.shape), np.broadcast_to(E, circ.shape), np.broadcast_to(N, circ.shape))
+                px, py = _poly(*proj.xy(alt_, az_), view)
+                if strength > 0:
+                    bx += px + [None]; by += py + [None]
+                else:
+                    dx += px + [None]; dy += py + [None]
+        traces["mw_pb"] = dict(x=bx, y=by, opacity=mw_vis)
+        traces["mw_pd"] = dict(x=dx, y=dy, opacity=mw_vis * 0.7)
     else:
-        traces[1] = dict(x=[], y=[], marker=dict(size=[], color="white", opacity=0))
+        for key, _, _ in MW_LAYERS:
+            traces[key] = dict(x=[], y=[], opacity=0)
+        for key in ("mw_rift", "mw_pb", "mw_pd"):
+            traces[key] = dict(x=[], y=[], opacity=0)
 
-    def place(alt, az, rad_deg, dx=0.0):
+    # faint stars, crowded along the galaxy
+    fv, fm = _faint()
+    if opts["faint"]:
+        alt_, az_ = _altaz(fv, np.broadcast_to(U, fv.shape), np.broadcast_to(E, fv.shape), np.broadcast_to(N, fv.shape))
+        vis = np.array([_vis(sun_alt, m) for m in fm])
+        keep = (alt_ > 0) & (vis > 0)
+        x, y = proj.xy(alt_[keep], az_[keep])
+        traces["faint"] = dict(x=list(x), y=list(y), marker=dict(size=list(np.round(1.2 + (5.6 - fm[keep]) * 0.4, 2)), color="white",
+                                                                  opacity=list(np.round(vis[keep] * 0.6, 2))))
+    else:
+        traces["faint"] = dict(x=[], y=[], marker=dict(size=[], color="white", opacity=[]))
+
+    # the named stars
+    if opts["named"] and stars:
+        sv = ecl_vec(np.array([st.lon for st in stars]), np.array([st.lat for st in stars]))
+        alt_, az_ = _altaz(sv, np.broadcast_to(U, sv.shape), np.broadcast_to(E, sv.shape), np.broadcast_to(N, sv.shape))
+        vis = np.array([_vis(sun_alt, st.mag) for st in stars])
+        keep = (alt_ > 0) & (vis > 0)
+        x, y = proj.xy(alt_[keep], az_[keep])
+        kept = [st for st, k in zip(stars, keep) if k]
+        traces["named"] = dict(x=list(x), y=list(y),
+                               text=[st.name if (st.label and vis[j] > 0.25) else "" for st, j in zip(kept, np.where(keep)[0])],
+                               marker=dict(size=[round(float(np.clip(7 - 1.7 * st.mag, 3.5, 12)), 1) for st in kept],
+                                           color=[st.color for st in kept], opacity=[round(float(vis[j]), 2) for j in np.where(keep)[0]]))
+    else:
+        traces["named"] = dict(x=[], y=[], text=[], marker=dict(size=[], color=[], opacity=[]))
+
+    def place(alt, az, rad_deg):
         x, y = proj.xy(alt, az)
         return float(x), float(y), rad_deg * scale
 
     cx, cy, r = place(d.sun["alt"][i], d.sun["az"][i], d.sun["rad"][i])
     op = 1.0 if sun_alt > 0 else 0.35
-    for key, mult, alpha in ((4, 6.0, 0.10), (5, 2.5, 0.22)):
+    for key, mult, alpha in (("sun_g1", 6.0, 0.10), ("sun_g2", 2.5, 0.22)):
         gx, gy = _circle(cx, cy, r * mult)
         x, y = _copies(gx, gy, view)
         traces[key] = dict(x=x, y=y, fillcolor=f"rgba(255,209,102,{alpha})", opacity=op)
     gx, gy = _circle(cx, cy, r)
     x, y = _copies(gx, gy, view)
-    traces[6] = dict(x=x, y=y, fillcolor="rgb(255,222,130)", opacity=op)
+    traces["sun"] = dict(x=x, y=y, fillcolor="rgb(255,222,130)", opacity=op)
     lx, ly = proj.xy(d.sun["alt"][i], d.sun["az"][i])
-    traces[7] = dict(x=[float(lx)], y=[float(ly) + r * 3.2 + 1.5], text=["Aureth" + ("" if sun_alt > 0 else " (below the horizon)")], opacity=op)
+    traces["sun_label"] = dict(x=[float(lx)], y=[float(ly) + r * 3.2 + 1.5], text=["Aureth" + ("" if sun_alt > 0 else " (below the horizon)")], opacity=op)
 
-    base = 8
-    for name, mo in d.moons.items():
+    for k, (name, mo) in enumerate(d.moons.items()):
         alt, az = float(mo["alt"][i]), float(mo["az"][i])
         cx, cy, r = place(alt, az, mo["rad"][i])
         op = 1.0 if alt > 0 else 0.35
         gx, gy = _circle(cx, cy, r)
         x, y = _copies(gx, gy, view)
-        traces[base] = dict(x=x, y=y, fillcolor="rgb(38,42,58)", opacity=op, line=dict(color=_rgba(MOON_TINT[name], 0.6), width=1))
-        # lit part, turned so that the bright side faces the Sun
+        traces[f"m{k}_dark"] = dict(x=x, y=y, opacity=op)
         px, py = proj.xy(mo["limb_alt"][i], mo["limb_az"][i])
-        phi = math.atan2(float(py) - cy, float(px) - cx) if view != "panorama" else math.atan2(float(py) - cy, ((float(px) - cx + 180) % 360) - 180)
+        dxv = ((float(px) - cx + 180) % 360) - 180 if view != "dome" else float(px) - cx
+        phi = math.atan2(float(py) - cy, dxv)
         lx_, ly_ = phase_disc(float(mo["k"][i]), True, r, cx, cy)
         rx = cx + (lx_ - cx) * math.cos(phi) - (ly_ - cy) * math.sin(phi)
         ry = cy + (lx_ - cx) * math.sin(phi) + (ly_ - cy) * math.cos(phi)
         x, y = _copies(rx, ry, view)
-        traces[base + 1] = dict(x=x, y=y, fillcolor=_rgba(MOON_TINT[name], 1.0), opacity=op)
-        traces[base + 2] = dict(x=[cx], y=[cy + r * 1.5 + 1.2], text=[f"{name} {mo['k'][i]:.0%}"], opacity=op)
-        base += 3
+        traces[f"m{k}_lit"] = dict(x=x, y=y, opacity=op)
+        traces[f"m{k}_label"] = dict(x=[cx], y=[cy + r * 1.5 + 1.2], text=[f"{name} {mo['k'][i]:.0%}"], opacity=op)
     px_, py_, tx, ops = [], [], [], []
     for name, p in d.planets.items():
         x, y = proj.xy(p["alt"][i], p["az"][i])
         px_.append(float(x)); py_.append(float(y)); tx.append(name); ops.append(1.0 if p["alt"][i] > 0 else 0.35)
-    traces[base] = dict(x=px_, y=py_, text=tx, marker=dict(size=9, color=[COLORS.get(n, "#ccc") for n in tx], opacity=ops))
+    traces["planets"] = dict(x=px_, y=py_, text=tx, marker=dict(size=9, color=[COLORS.get(n, "#ccc") for n in tx], opacity=ops))
     for tr in traces.values():
         for key in ("x", "y"):
             if key in tr:
@@ -257,35 +358,57 @@ def _frame_traces(d: SkyData, i: int, proj: Projection, scale: float, show_stars
     return traces
 
 
+_FAINT_CACHE: dict = {}
+
+
+def _faint():
+    if "v" not in _FAINT_CACHE:
+        _FAINT_CACHE["v"], _FAINT_CACHE["m"] = faint_stars(load_sky()[1])
+    return _FAINT_CACHE["v"], _FAINT_CACHE["m"]
+
+
 def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov: float = 360.0, scale: float = 10.0,
-               show_stars: bool = True, start_index: int = 0, ref: SkyData | None = None, frame_ms: int = 140) -> go.Figure:
+               named: bool = True, start_index: int = 0, ref: SkyData | None = None, frame_ms: int = 140,
+               milky_way: bool = True, faint: bool = True) -> go.Figure:
     proj = Projection(view, center_az)
     ref = ref or d
-    fig = go.Figure()
-    first = _frame_traces(d, start_index, proj, scale, show_stars)
+    opts = {"named": named, "milky_way": milky_way, "faint": faint}
+    first = _frame_traces(d, start_index, proj, scale, opts)
     n_moons = len(d.moons)
-    fig.add_trace(go.Scatter(x=first[0]["x"], y=first[0]["y"], fill="toself", mode="lines", line=dict(width=0), fillcolor=first[0]["fillcolor"], hoverinfo="skip", showlegend=False))
-    fig.add_trace(go.Scatter(x=first[1]["x"], y=first[1]["y"], mode="markers", marker=first[1]["marker"], hoverinfo="skip", showlegend=False))
+    fig = go.Figure()
+    idx: dict[str, int] = {}
+
+    def dyn(key, **kw):
+        props = {k: v for k, v in first[key].items()}
+        kw.update({k: props[k] for k in props if k in ("x", "y", "text", "fillcolor", "opacity", "marker")})
+        if "fillcolor" in props and "fillcolor" in kw:
+            kw["fillcolor"] = props["fillcolor"]
+        fig.add_trace(go.Scatter(hoverinfo="skip", showlegend=False, **kw))
+        idx[key] = len(fig.data) - 1
+
+    filled = dict(fill="toself", mode="lines", line=dict(width=0))
+    dyn("sky", **filled)
+    for key, _, colour in MW_LAYERS:
+        dyn(key, **{**filled, "fillcolor": colour})
+    dyn("mw_rift", **{**filled, "fillcolor": "rgba(5,8,18,0.8)"})
+    dyn("mw_pb", **{**filled, "fillcolor": "rgba(255,238,215,0.035)"})
+    dyn("mw_pd", **{**filled, "fillcolor": "rgba(4,6,16,0.45)"})
+    dyn("faint", mode="markers")
+    dyn("named", mode="markers+text", textposition="top right", textfont=dict(color="#ced4da", size=11))
+
+    # ground, grid, compass
     if view == "dome":
         a = np.linspace(0, 2 * np.pi, 180)
-        ring_out = np.concatenate([120 * np.cos(a), 90 * np.cos(a[::-1])]); ring_oy = np.concatenate([120 * np.sin(a), 90 * np.sin(a[::-1])])
-        fig.add_trace(go.Scatter(x=list(ring_out), y=list(ring_oy), fill="toself", mode="lines", fillcolor="rgb(30,26,24)",
-                                 line=dict(width=0), hoverinfo="skip", showlegend=False))
-        gx, gy, gt = [], [], []
+        ring_x = np.concatenate([300 * np.cos(a), 90 * np.cos(a[::-1])]); ring_y = np.concatenate([300 * np.sin(a), 90 * np.sin(a[::-1])])
+        fig.add_trace(go.Scatter(x=list(ring_x), y=list(ring_y), fill="toself", mode="lines", fillcolor="rgb(30,26,24)", line=dict(width=0), hoverinfo="skip", showlegend=False))
+        gx, gy = [], []
         for alt in (30, 60):
             r = 90 - alt
             gx += list(r * np.cos(a)) + [None]; gy += list(r * np.sin(a)) + [None]
-        for i, name in enumerate(COMPASS):
-            az = i * 45
-            x_, y_ = proj.xy(0.0, az)
-            xl, yl = proj.xy(-8.0, az)
-            gt.append((float(xl), float(yl), name))
         fig.add_trace(go.Scatter(x=gx, y=gy, mode="lines", line=dict(color="rgba(255,255,255,0.15)", width=1, dash="dot"), hoverinfo="skip", showlegend=False))
-        fig.add_trace(go.Scatter(x=[g[0] for g in gt], y=[g[1] for g in gt], mode="text", text=[g[2] for g in gt],
-                                 textfont=dict(color="#ced4da", size=13), hoverinfo="skip", showlegend=False))
+        lab = [(float(proj.xy(-8.0, i * 45)[0]), float(proj.xy(-8.0, i * 45)[1]), name) for i, name in enumerate(COMPASS)]
     else:
-        fig.add_trace(go.Scatter(x=[-540, 540, 540, -540, -540], y=[-60, -60, 0, 0, -60], fill="toself", mode="lines", fillcolor="rgb(30,26,24)",
-                                 line=dict(width=0), hoverinfo="skip", showlegend=False))
+        fig.add_trace(go.Scatter(x=[-540, 540, 540, -540, -540], y=[-60, -60, 0, 0, -60], fill="toself", mode="lines", fillcolor="rgb(30,26,24)", line=dict(width=0), hoverinfo="skip", showlegend=False))
         gx, gy = [-540, 540, None], [0, 0, None]
         for alt in (30, 60):
             gx += [-540, 540, None]; gy += [alt, alt, None]
@@ -294,10 +417,11 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
         for i, name in enumerate(COMPASS):
             rel = (i * 45 - center_az + 180) % 360 - 180
             for off in (-360, 0, 360):
-                lab.append((rel + off, name))
-        fig.add_trace(go.Scatter(x=[l[0] for l in lab], y=[-4] * len(lab), mode="text", text=[l[1] for l in lab],
-                                 textfont=dict(color="#ced4da", size=14), hoverinfo="skip", showlegend=False))
-    # each body's path across the day, with an arrow showing which way it goes
+                lab.append((rel + off, -4, name))
+    fig.add_trace(go.Scatter(x=[l[0] for l in lab], y=[l[1] for l in lab], mode="text", text=[l[2] for l in lab],
+                             textfont=dict(color="#ced4da", size=14), hoverinfo="skip", showlegend=False))
+
+    # each body's path across the reference day, with an arrow
     tracks = [("Aureth", ref.sun["alt"], ref.sun["az"], "255,209,102")] + [
         (n, m["alt"], m["az"], ",".join(str(v) for v in MOON_TINT[n])) for n, m in ref.moons.items()]
     for name, alt, az, rgb in tracks:
@@ -313,8 +437,7 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
         if len(run) > 1:
             px += list(X[run]) + [None]; py += list(Y[run]) + [None]
         fig.add_trace(go.Scatter(x=px, y=py, mode="lines", line=dict(color=f"rgba({rgb},0.5)", width=2, dash="dot"),
-                                 hovertemplate=f"{name}'s path today<extra></extra>", showlegend=False))
-        # arrow three quarters of the way along the longest stretch
+                                 hovertemplate=f"{name}'s path<extra></extra>", showlegend=False))
         best, cur = [], []
         for q in range(len(alt)):
             if alt[q] > 0:
@@ -325,41 +448,31 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
         best = cur if len(cur) > len(best) else best
         if len(best) >= 4:
             m = best[int(0.7 * (len(best) - 1))]
-            idx3 = [m - 1, m, m + 1]
-            fig.add_trace(go.Scatter(x=[float(X[q]) for q in idx3], y=[float(Y[q]) for q in idx3], mode="markers",
+            i3 = [m - 1, m, m + 1]
+            fig.add_trace(go.Scatter(x=[float(X[q]) for q in i3], y=[float(Y[q]) for q in i3], mode="markers",
                                      marker=dict(symbol="arrow", angleref="previous", size=[0, 13, 0], color=f"rgba({rgb},0.9)"),
                                      hoverinfo="skip", showlegend=False))
         else:
             fig.add_trace(go.Scatter(x=[], y=[], mode="markers", hoverinfo="skip", showlegend=False))
-    # dynamic objects
-    fig.add_trace(go.Scatter(x=first[4]["x"], y=first[4]["y"], fill="toself", mode="lines", line=dict(width=0), fillcolor=first[4]["fillcolor"], hoverinfo="skip", showlegend=False))
-    fig.add_trace(go.Scatter(x=first[5]["x"], y=first[5]["y"], fill="toself", mode="lines", line=dict(width=0), fillcolor=first[5]["fillcolor"], hoverinfo="skip", showlegend=False))
-    fig.add_trace(go.Scatter(x=first[6]["x"], y=first[6]["y"], fill="toself", mode="lines", line=dict(width=0), fillcolor=first[6]["fillcolor"], hoverinfo="skip", showlegend=False))
-    fig.add_trace(go.Scatter(x=first[7]["x"], y=first[7]["y"], mode="text", text=first[7]["text"], textfont=dict(color="#ffd166", size=13), hoverinfo="skip", showlegend=False))
-    base = 8
-    for name in d.moons:
-        fig.add_trace(go.Scatter(x=first[base]["x"], y=first[base]["y"], fill="toself", mode="lines", fillcolor=first[base]["fillcolor"], line=first[base]["line"], hoverinfo="skip", showlegend=False))
-        fig.add_trace(go.Scatter(x=first[base + 1]["x"], y=first[base + 1]["y"], fill="toself", mode="lines", fillcolor=first[base + 1]["fillcolor"], line=dict(width=0), hoverinfo="skip", showlegend=False))
-        fig.add_trace(go.Scatter(x=first[base + 2]["x"], y=first[base + 2]["y"], mode="text", text=first[base + 2]["text"], textfont=dict(color="#e9ecef", size=12), hoverinfo="skip", showlegend=False))
-        base += 3
-    fig.add_trace(go.Scatter(x=first[base]["x"], y=first[base]["y"], mode="markers+text", text=first[base]["text"], textposition="top center",
-                             textfont=dict(color="#e9ecef", size=11), marker=first[base]["marker"], hoverinfo="skip", showlegend=False))
-    # figure traces: 0 sky, 1 stars, 2 ground, 3 grid, 4 compass, then the day's paths and arrows, then the Sun's two glows, disc and label,
-    # the moons, the planets. A frame key k >= 4 therefore lives at figure trace k + 1 + the number of path traces.
-    n_track_traces = 2 * (1 + n_moons)           # a path line and an arrow for the Sun and each moon
-    fig_idx = {0: 0, 1: 1}
-    for k in [4, 5, 6, 7] + list(range(8, 8 + 3 * n_moons + 1)):
-        fig_idx[k] = k + 1 + n_track_traces
+
+    dyn("sun_g1", **filled)
+    dyn("sun_g2", **filled)
+    dyn("sun", **filled)
+    dyn("sun_label", mode="text", textfont=dict(color="#ffd166", size=13))
+    for k, name in enumerate(d.moons):
+        dyn(f"m{k}_dark", fill="toself", mode="lines", fillcolor="rgb(38,42,58)", line=dict(color=_rgba(MOON_TINT[name], 0.6), width=1))
+        dyn(f"m{k}_lit", fill="toself", mode="lines", fillcolor=_rgba(MOON_TINT[name], 1.0), line=dict(width=0))
+        dyn(f"m{k}_label", mode="text", textfont=dict(color="#e9ecef", size=12))
+    dyn("planets", mode="markers+text", textposition="top center", textfont=dict(color="#e9ecef", size=11))
 
     frames = []
     for i in range(len(d.clock)):
-        tr = _frame_traces(d, i, proj, scale, show_stars)
+        tr = _frame_traces(d, i, proj, scale, opts)
         data = []
-        for k, idx in fig_idx.items():
-            v = tr[k]
-            kw = {kk: vv for kk, vv in v.items()}
-            data.append(go.Scatter(**kw))
-        frames.append(go.Frame(data=data, traces=list(fig_idx.values()), name=str(i)))
+        for key, fi in idx.items():
+            v = tr[key]
+            data.append(go.Scatter(**{k: v[k] for k in v if k in ("x", "y", "text", "fillcolor", "opacity", "marker")}))
+        frames.append(go.Frame(data=data, traces=list(idx.values()), name=str(i)))
     fig.frames = frames
 
     if view == "dome":
@@ -369,9 +482,9 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
         xr = [-half, half]
         yr = [-22, min(95, 10 + 0.62 * fov)] if fov < 360 else [-22, 92]
         h = 470
-    ticks = dict(tickvals=list(range(-180, 181, 30)) if fov >= 180 else list(range(-180, 181, 15)))
+    tv = list(range(-180, 181, 30)) if fov >= 180 else list(range(-180, 181, 15))
     fig.update_xaxes(range=xr, showgrid=False, zeroline=False, visible=(view != "dome"), scaleanchor="y", constrain="domain",
-                     tickvals=ticks["tickvals"], ticktext=[f"{int((center_az + v) % 360)}°" for v in ticks["tickvals"]])
+                     tickvals=tv, ticktext=[f"{int((center_az + v) % 360)}°" for v in tv])
     fig.update_yaxes(range=yr, showgrid=False, zeroline=False, visible=(view != "dome"), constrain="domain", title_text="height above the horizon (°)")
     every = max(1, int(math.ceil(len(frames) / 10)))
     steps = [dict(label=(d.labels[i] if i % every == 0 else ""), method="animate",
@@ -445,4 +558,11 @@ def find_sight(d: SkyData, name: str, i: int) -> float:
         return float(d.sun["az"][i])
     if name in d.moons:
         return float(d.moons[name]["az"][i])
-    return float(d.planets[name]["az"][i])
+    if name in d.planets:
+        return float(d.planets[name]["az"][i])
+    for st in load_sky()[0]:
+        if st.name == name:
+            v = ecl_vec(np.array(st.lon), np.array(st.lat))[None, :]
+            _, az = _altaz(v, d.U[i][None, :], d.E[i][None, :], d.N[i][None, :])
+            return float(az[0])
+    return 180.0

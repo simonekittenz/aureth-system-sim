@@ -12,10 +12,13 @@ from bajurinda import plots
 from bajurinda.constants import M_EARTH, M_SUN, YEAR_DAYS
 from bajurinda.eclipses import SITE_ANNULAR, SITE_PARTIAL, SITE_TOTAL, eclipse_events, site_eclipse_types, site_rates, summarise
 from bajurinda.cycles import axial_precession, moon_cycles
+from bajurinda.sky import spin_axis
+from bajurinda.starfield import ecl_vec
 from bajurinda.landmarks import (
     moon_declination_envelope, rise_offset_deg, return_cycles, star_alignment_life, sun_markers,
 )
 from bajurinda.nightsky import compute_sky, day_crossings, find_sight, readout, sky_figure
+from bajurinda.starfield import load_sky
 from bajurinda.eras import era_bands, era_summary, eras_data
 from bajurinda.lunar_calendar import build_calendar
 from bajurinda.dynamics import integrate, mean_rates, phase_ensemble, stability_run
@@ -67,7 +70,7 @@ for _k, _v in ss.get("_moons_saved", {}).items():
         ss[_k] = _v
 for _k, _v in {"v_window": 240, "v_step": 3, "v_lat": 10, "v_lon": 0, "v_unit": "Earth days", "v_sky_year": 1, "v_sky_day": 1,
                "v_sky_clock": 0.0, "v_sky_view": "Panorama", "v_sky_fov": 360, "v_sky_look": "Liwaya", "v_sky_scale": 12,
-               "v_sky_stars": True, "v_sky_step": "30 minutes", "v_sky_span": "1 day", "v_sky_ms": 140}.items():
+               "v_sky_named": True, "v_sky_mw": True, "v_sky_faint": True, "v_sky_step": "30 minutes", "v_sky_span": "1 day", "v_sky_ms": 140}.items():
     if _k not in ss:
         ss[_k] = _v
 
@@ -568,13 +571,30 @@ with tabs[8]:
     st.markdown("**Fixed stars**")
     ap = axial_precession(system)
     sl = star_alignment_life(ap["years"], planet.obliquity_deg)
+    stars_, _mw = load_sky()
+    ax_ = spin_axis(planet)
+    srows = []
+    for st_ in stars_:
+        v_ = ecl_vec(np.array(st_.lon), np.array(st_.lat))
+        dec_ = math.degrees(math.asin(max(-1.0, min(1.0, float(v_ @ ax_)))))
+        ro_ = rise_offset_deg(dec_, lat)
+        if ro_ is not None:
+            where = f"{ro_:+.1f}"
+        elif (dec_ > 0) == (lat >= 0) and abs(dec_) > 90 - abs(lat):
+            where = "never sets here"
+        else:
+            where = "never rises here"
+        srows.append({"Star": st_.name, "Brightness (magnitude)": st_.mag, "Declination": f"{dec_:+.1f}°", "Rises (° from east)": where,
+                      "Passes": ("north" if dec_ > lat else "south") + " of the zenith", "Note": st_.note})
+    st.dataframe(pd.DataFrame(srows).sort_values("Brightness (magnitude)"), hide_index=True, width="stretch")
     st.write(f"The spin axis wobbles round once in about {ap['years']:,.0f} Bayurindan years, so a star's rising point slowly creeps. "
              f"At worst it moves {sl['per_century']:.2f}° per century (stars crossing the sky at 0 or 12 hours of right ascension), "
              "and not at all for stars at 6 or 18 hours.")
     st.dataframe(pd.DataFrame([{"A marker is good to": f"{tol}°" + (" (half a moon's width)" if tol == 0.25 else ""),
                                 "Stays aligned for (worst case)": f"{yrs:.0f} years"} for tol, yrs in sl["years_to_drift"].items()]),
                  hide_index=True, width="stretch")
-    st.caption("Alignments to the Sun's solstices and to Liwaya's standstills do not creep this way, because the moons hold the planet's tilt steady.")
+    st.caption("The stars here are placeholders (names, positions and brightness are in data/aureth.yaml). Alignments to the Sun's solstices "
+               "and to Liwaya's standstills do not creep this way, because the moons hold the planet's tilt steady.")
 
 
 # ------------------------------------------------------------------ Night sky
@@ -605,17 +625,23 @@ with tabs[9]:
     step_label = p1.select_slider("Time between frames", list(STEPS), key="v_sky_step")
     span_label = p2.select_slider("Play for", list(SPANS), key="v_sky_span")
     frame_ms = p3.slider("Pause between frames (milliseconds)", 20, 1000, step=10, key="v_sky_ms", help="Smaller is faster.")
-    v1, v2, v3, v4, v5 = st.columns([1.3, 1.2, 1.3, 1.5, 1])
+    v1, v2, v3, v4 = st.columns([1.3, 1.2, 1.3, 1.5])
     view = v1.radio("View", ["Panorama", "All-sky dome"], key="v_sky_view", horizontal=True,
                     help="Panorama: the horizon laid out flat. Dome: looking straight up, north at the top, east on the left.")
     fov = v2.select_slider("Panorama width (degrees)", [360, 180, 90, 45], key="v_sky_fov")
-    look = v3.selectbox("Look toward", ["Liwaya", "Nineya", "Aureth", "Ashara", "Tarnic", "N", "NE", "E", "SE", "S", "SW", "W", "NW"], key="v_sky_look")
+    look_choices = ["Liwaya", "Nineya", "Aureth", "Ashara", "Tarnic"] + [st_.name for st_ in load_sky()[0]] + ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+    if ss["v_sky_look"] not in look_choices:
+        ss["v_sky_look"] = "Liwaya"
+    look = v3.selectbox("Look toward", look_choices, key="v_sky_look")
     scale = v4.slider("Draw the Sun and moons larger by", 1, 40, key="v_sky_scale", help="1 is true size: the discs are about half a degree across.")
-    stars_on = v5.checkbox("Background stars", key="v_sky_stars", help="Decorative placeholders; your stars are not defined yet.")
+    t1, t2, t3, _ = st.columns([1, 1, 1, 2])
+    named_on = t1.checkbox("Named stars", key="v_sky_named", help="The bright stars from the sky section of data/aureth.yaml. Names and positions are placeholders.")
+    mw_on = t2.checkbox("Milky Way", key="v_sky_mw", help="Built from the galaxy's pole, centre and width in data/aureth.yaml.")
+    faint_on = t3.checkbox("Faint stars", key="v_sky_faint", help="Decorative: crowded along the Milky Way, thin elsewhere.")
 
     span_h = SPANS[span_label]
     step_h = min(STEPS[step_label], span_h)
-    MAX_FRAMES = 300
+    MAX_FRAMES = 240
     if span_h / step_h + 1 > MAX_FRAMES:
         step_h = span_h / (MAX_FRAMES - 1)
         st.info(f"That would be more than {MAX_FRAMES} frames, so the time between frames is widened to "
@@ -631,11 +657,12 @@ with tabs[9]:
     ref = sky if (abs(span_h - 19.0) < 1e-9 and abs(step_h - 0.5) < 1e-9) else get_sky(system, float(lat), float(lon), float(day_total), start_h, 19.0, 0.5)
     compass = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SW": 225, "W": 270, "NW": 315}
     center = float(compass[look]) if look in compass else find_sight(sky, look, 0)
-    st.plotly_chart(sky_figure(sky, "dome" if view == "All-sky dome" else "panorama", center, float(fov), float(scale), stars_on, 0, ref, int(frame_ms)),
+    st.plotly_chart(sky_figure(sky, "dome" if view == "All-sky dome" else "panorama", center, float(fov), float(scale), named_on, 0, ref, int(frame_ms), mw_on, faint_on),
                     width="stretch")
     st.caption(f"{len(sky.clock)} frames from {sky.labels[0]} to {sky.labels[-1]}. Press Play or drag the slider under the picture. "
                "The table and the dotted paths describe the first moment and the 19 hours after it. Faded objects are below the horizon; "
-               "the bright side of each moon faces Aureth. Nineya is close enough that where you stand shifts it against the sky.")
+               "the bright side of each moon faces Aureth. Nineya is close enough that where you stand shifts it against the sky. "
+               "The stars and the Milky Way are placeholders you can edit in data/aureth.yaml.")
     st.dataframe(pd.DataFrame(readout(sky, 0, ref)), hide_index=True, width="stretch")
     cx = {k: v for k, v in day_crossings(ref).items() if v and k in ("Aureth", "Liwaya", "Nineya")}
     if len({v["rightward"] for v in cx.values()}) > 1:

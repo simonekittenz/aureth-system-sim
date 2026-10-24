@@ -61,9 +61,19 @@ and where the double-full and double-new months fall. Gold bands mark the stretc
 ## Night sky tab
 
 The sky from a chosen latitude, longitude and local time: Aureth, both moons with their true phases, Ashara and Tarnic, the
-horizon with compass points and a decorative star field (placeholders, not canon). A panorama or an all-sky dome, with a
+horizon with compass points, a set of named bright stars and a Milky Way. The stars and the galaxy's shape come from
+the `sky` section of `data/aureth.yaml` and are all placeholders: rename and move them freely. A panorama or an all-sky dome, with a
 Play button that runs a time-lapse. You choose the start, the time between frames (5 minutes to 10 days), how long it plays
 (an hour to four years) and the speed. The founding moment is the default view.
+
+### Editing the sky
+
+In `data/aureth.yaml`, under `sky`:
+
+- `stars`: each has a `name`, `lon` and `lat` (ecliptic coordinates; longitude 180 is where Aureth sits at the founding moment), a `mag`
+  (smaller is brighter), a `color` and whether to show its name.
+- `milky_way`: the `pole` of the galaxy's plane, `centre_lon` (where the bright centre lies), `width_deg`, `bulge_width_deg` and
+  `bulge_length_deg` (how much it swells toward the centre), a dark `rift` and any number of `patches` (positive glows, negative dark clouds).
 
 ## Landmarks tab
 
@@ -111,7 +121,8 @@ and where the double-full and double-new months fall. Gold bands mark the stretc
 ## Night sky tab
 
 The sky from a chosen latitude, longitude and local time: Aureth, both moons with their true phases, Ashara and Tarnic, the
-horizon with compass points and a decorative star field (placeholders, not canon). A panorama or an all-sky dome, with a
+horizon with compass points, a set of named bright stars and a Milky Way. The stars and the galaxy's shape come from
+the `sky` section of `data/aureth.yaml` and are all placeholders: rename and move them freely. A panorama or an all-sky dome, with a
 Play button that runs a time-lapse. You choose the start, the time between frames (5 minutes to 10 days), how long it plays
 (an hour to four years) and the speed. The founding moment is the default view.
 

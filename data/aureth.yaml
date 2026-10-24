@@ -62,6 +62,41 @@ system_start:
   phase_deg: {Bayurinda: 0, Ashara: 0, Tarnic: 0}
   inclination_deg: 0         # placeholder: all orbits flat in one plane
 
+# The background sky: bright stars and the shape of the galaxy. EVERYTHING HERE IS A PLACEHOLDER (names, positions,
+# brightness, colours); rename and move freely. Positions are ecliptic coordinates in the simulation's frame: longitude
+# is measured from the direction pointing away from Aureth at the founding moment (so Aureth sits at longitude 180 then),
+# latitude from the orbit plane. Magnitude: smaller is brighter (-1 very bright, 2 easily seen, 5 barely visible).
+# The planet's north celestial pole is at longitude 0, latitude 74 (the axis tilts 16 degrees).
+sky:
+  status: placeholder
+  stars:
+    - {name: "Still Star",     lon:   0.0, lat:  74.6, mag:  2.0, color: "#fff1cc", label: true,  note: "near the north celestial pole; barely moves"}
+    - {name: "Blue Beacon",    lon:  98.0, lat: -32.0, mag: -1.2, color: "#a9c8ff", label: true,  note: "the brightest star"}
+    - {name: "Red Ember",      lon: 205.0, lat:   8.0, mag:  0.2, color: "#ff8c69", label: true,  note: "close to the ecliptic, so the moons pass near it"}
+    - {name: "Gold Lantern",   lon: 312.0, lat:  41.0, mag:  0.5, color: "#ffd27a", label: true}
+    - {name: "White Twin",     lon: 150.0, lat:  20.0, mag:  1.0, color: "#f4f7ff", label: true,  note: "a close pair"}
+    - {name: "White Twin B",   lon: 152.3, lat:  20.5, mag:  1.7, color: "#f4f7ff", label: false}
+    - {name: "Green Spark",    lon:  45.0, lat:  55.0, mag:  1.3, color: "#c4ffe0", label: true}
+    - {name: "Amber Warden",   lon: 268.0, lat: -47.0, mag:  0.9, color: "#ffb35c", label: true}
+    - {name: "Ice Needle",     lon: 330.0, lat: -12.0, mag:  1.8, color: "#cfe9ff", label: true}
+    - {name: "Violet Eye",     lon: 120.0, lat:  62.0, mag:  1.5, color: "#dcc8ff", label: true}
+    - {name: "Far Lamp",       lon: 235.0, lat:  30.0, mag:  2.0, color: "#fff0cf", label: true}
+    - {name: "Dawnmark",       lon:  20.0, lat:  -1.0, mag:  0.8, color: "#ffe9c4", label: true,  note: "on the Sun's path"}
+  milky_way:
+    pole: {lon: 215.0, lat: 28.0}   # the pole of the galaxy's plane; the band is the great circle 90 degrees from it
+    centre_lon: 258.0               # ecliptic longitude toward the galaxy's bright centre (projected onto the plane)
+    width_deg: 4.5                  # half-width of the bright band away from the centre
+    bulge_width_deg: 6.5            # extra half-width at the centre
+    bulge_length_deg: 30.0          # how far along the band the swelling reaches
+    rift: {from_deg: 335.0, to_deg: 45.0, strength: 0.5}   # dark lane, in degrees along the band from the centre
+    brightness: 1.0
+    patches:                         # extra clouds: positive glows, negative is a dark cloud
+      - {lon: 255.0, lat: -18.0, size_deg: 5.0, strength: 1.0}
+      - {lon: 232.0, lat:   2.0, size_deg: 4.0, strength: 0.8}
+      - {lon: 292.0, lat: -30.0, size_deg: 4.5, strength: 0.7}
+      - {lon: 270.0, lat:  -8.0, size_deg: 3.0, strength: -0.8}
+      - {lon: 140.0, lat:  38.0, size_deg: 4.5, strength: 0.6}
+
 planets:
   - name: Calderic
     rank: 1
