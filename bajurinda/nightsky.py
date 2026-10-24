@@ -606,13 +606,13 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
     fig.update_yaxes(range=yr, showgrid=False, zeroline=False, visible=(view != "dome"), constrain="domain", title_text="height above the horizon (°)")
     every = max(1, int(math.ceil(len(frames) / 10)))
     steps = [dict(label=(d.labels[i] if i % every == 0 else ""), method="animate",
-                  args=[[f.name], dict(mode="immediate", frame=dict(duration=0, redraw=True))]) for i, f in enumerate(frames)]
+                  args=[[f.name], dict(mode="immediate", frame=dict(duration=0, redraw=True), transition=dict(duration=0))]) for i, f in enumerate(frames)]
     layout = dict(height=h, margin=dict(l=10, r=10, t=10 if pick else 44, b=10), plot_bgcolor="rgb(10,12,20)", paper_bgcolor="rgba(0,0,0,0)",
                   hoverlabel=dict(bgcolor="rgba(20,24,40,0.95)", font=dict(size=14, color="#f1f3f5"), bordercolor="#868e96"))
     if not pick:
         layout.update(updatemenus=[dict(type="buttons", direction="left", x=0.0, y=1.0, yanchor="bottom", buttons=[
-            dict(label="Play", method="animate", args=[None, dict(frame=dict(duration=int(frame_ms), redraw=True), fromcurrent=True)]),
-            dict(label="Pause", method="animate", args=[[None], dict(frame=dict(duration=0, redraw=False), mode="immediate")])])],
+            dict(label="Play", method="animate", args=[None, dict(frame=dict(duration=int(frame_ms), redraw=True), transition=dict(duration=0), fromcurrent=True, mode="immediate")]),
+            dict(label="Pause", method="animate", args=[[None], dict(frame=dict(duration=0, redraw=False), transition=dict(duration=0), mode="immediate")])])],
             sliders=[dict(active=start_index, currentvalue=dict(prefix="", font=dict(size=14)), pad=dict(t=30), steps=steps)])
     fig.update_layout(**layout)
     if pick and view != "dome":
