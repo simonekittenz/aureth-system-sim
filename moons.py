@@ -617,13 +617,16 @@ with tabs[9]:
     st.dataframe(pd.DataFrame(readout(sky, idx)), hide_index=True, width="stretch")
     cx = {k: v for k, v in day_crossings(sky).items() if v and k in ("Aureth", "Liwaya", "Nineya")}
     if len({v["rightward"] for v in cx.values()}) > 1:
-        who = lambda r: ", ".join(k for k, v in cx.items() if v["rightward"] == r)
-        st.info(f"Everything still rises in the east and sets in the west, but {who(True)} cross{'es' if len(who(True).split(', ')) == 1 else ''} "
-                f"south of the zenith and drift left to right on the panorama, while {who(False)} cross{'es' if len(who(False).split(', ')) == 1 else ''} "
-                "north of it and drift right to left. At low latitudes, with a 16° axial tilt, bodies can pass on either side of the zenith. "
-                "The dotted paths and arrows show each one's route today.")
-    if ss["v_sky_year"] == 1 and ss["v_sky_day"] == 1 and ss["v_sky_clock"] == 0.0:
-        st.caption("This is the founding moment: Liwaya and Nineya full, overlapping, almost overhead, with Ashara and Tarnic in the same line and Aureth directly beneath.")
+        def group(r):
+            names = [k for k, v in cx.items() if v["rightward"] == r]
+            joined = " and ".join(names)
+            return joined, len(names) == 1
+        east_names, east_one = group(True)
+        west_names, west_one = group(False)
+        st.info(f"Everything still rises in the east and sets in the west, but {east_names} cross{'es' if east_one else ''} south of the zenith "
+                f"and drift{'s' if east_one else ''} left to right on the panorama, while {west_names} cross{'es' if west_one else ''} north of it "
+                f"and drift{'s' if west_one else ''} right to left. At low latitudes, with a 16° axial tilt, bodies can pass on either side of the zenith. "
+                "The dotted paths and arrows show each one's route today, and the all-sky dome shows them going the same way round.")
 
 
 # ------------------------------------------------------------------ Stability
