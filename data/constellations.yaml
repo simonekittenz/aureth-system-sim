@@ -92,3 +92,8 @@ sets:
           - ["Ice Needle", "Pilgrim"]
           - ["Pilgrim", "Gold Lantern"]
           - ["Gold Lantern", "Wren"]
+      - name: "what this"
+        lines:
+          - ["S1", "S2"]
+          - ["S2", "S3"]
+          - ["S3", "S4"]

@@ -153,6 +153,7 @@ planets:
     status: canon
     moons:                     # Design B: author's chosen design, hypothetical, not yet in the world files
       - name: Liwaya           # the larger moon (canon)
+        color: Silver-blue / pearlescent white     # canon: fresh water ice reflects light efficiently and fairly neutrally
         status: decision
         diameter_km: 3450
         mean_distance_km: 362900
@@ -160,6 +161,7 @@ planets:
         phase_cycle_solar_days: 38.5
         tilt_deg: 1.5
       - name: Nineya           # the smaller moon (canon)
+        color: Champagne gold / warm ivory         # canon: a subtle warm tint, not yellow stage lighting
         status: decision
         diameter_km: 1200
         mean_distance_km: 150250

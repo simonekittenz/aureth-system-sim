@@ -6,13 +6,14 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from .constants import MOON_CHART, MOON_RGB
 from .dynamics import StabilityResult, Track
 from .model import System, angular_diameter_deg, stable_limit_km
 from .eras import ErasData
 from .lunar_calendar import CalendarData
 from .sky import TideSeries, elongation, illuminated_fraction, phase_disc
 
-COL = {"Liwaya": "#4cc9f0", "Nineya": "#f72585", "Sun": "#ffb703", "total": "#e9ecef"}
+COL = {**MOON_CHART, "Sun": "#ffb703", "total": "#e9ecef"}
 
 
 def _circle(r: float, n: int = 200):
@@ -102,7 +103,7 @@ def sky_discs_figure(system: System, track: Track, i: int) -> go.Figure:
         ang = angular_diameter_deg(m.radius_km, d)
         frac = float(illuminated_fraction(track.moon_pos[i:i + 1, k], track.star_pos[i:i + 1])[0])
         el = float(elongation(track.moon_pos[:, k], track.star_pos)[i]) % (2 * np.pi)
-        items.append((m.name, ang, frac, el < np.pi, COL[m.name]))
+        items.append((m.name, ang, frac, el < np.pi, "rgb(%d,%d,%d)" % MOON_RGB.get(m.name, (230, 230, 230))))      # pale, to read on the dark background
     items.append(("Earth's Moon (reference)", angular_diameter_deg(1737.4, 384400), 1.0, True, "#868e96"))
     sun_ang = angular_diameter_deg(pl.star_radius_km, float(np.linalg.norm(track.star_pos[i])))
     items.append(("Sun", sun_ang, 1.0, True, COL["Sun"]))

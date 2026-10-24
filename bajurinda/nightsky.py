@@ -7,6 +7,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 from .aureth import COLORS
+from .constants import MOON_RGB
 from .dynamics import build_simulation
 from .model import System, angular_diameter_deg
 from .sky import illuminated_fraction, phase_disc, spin_axis, surface_normal
@@ -14,7 +15,7 @@ from .starfield import band_edges, circle_on_sky, ecl_vec, faint_stars, load_fai
 
 SKY_STOPS = [(10, (122, 184, 255)), (3, (240, 170, 120)), (0, (224, 140, 100)), (-6, (61, 79, 143)),
              (-12, (29, 39, 80)), (-18, (7, 11, 26))]
-MOON_TINT = {"Liwaya": (232, 241, 255), "Nineya": (255, 214, 230)}
+MOON_TINT = MOON_RGB
 COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 
 
