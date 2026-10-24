@@ -74,6 +74,13 @@ longitude and latitude under the pointer (the same numbers the `sky` section use
 nearest named star. A **Preview a star** box lets you type coordinates and see where a star would sit, and gives the line to paste into the
 data file. Narrow the panorama width for finer pointing.
 
+### Reloading after you edit the data files
+
+Streamlit re-runs when the Python files change, but it does not re-read the data folder, and the app also remembers its calculations.
+After editing `data/aureth.yaml` or `data/constellations.yaml` by hand, press **Reload data files** at the top of the sidebar. It re-reads both,
+clears the saved calculations, and leaves your sidebar settings alone. Unsaved constellation edits are kept (use *Undo unsaved changes* to
+throw them away and take the file's version). If a file has a typo, the error is shown so you can fix it and press Reload again.
+
 ### Constellation sets
 
 The Night sky tab has a **Constellation sets** box for joining the named stars into pictures. A *set* is one way of joining the stars

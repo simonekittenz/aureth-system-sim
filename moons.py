@@ -826,7 +826,7 @@ with tabs[9]:
             save_constellations(work); ss["_con_disk"] = clone(work)
 
         def revert_cons():
-            work[:] = clone(ss["_con_disk"]); ss["v_con_edit"] = None; ss["v_con_fig"] = None
+            work[:] = clone(load_constellations()); ss["_con_disk"] = clone(work); ss["v_con_edit"] = None; ss["v_con_fig"] = None
 
         s1, s2, s3 = st.columns([1, 1, 2.2])
         s1.button("Save to data/constellations.yaml", on_click=save_cons, key="con_save", type="primary" if dirty else "secondary", disabled=not dirty)
