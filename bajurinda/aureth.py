@@ -2,16 +2,13 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from pathlib import Path
 
 import numpy as np
-import yaml
 
-from .constants import AU_KM, G, G_EARTH, M_EARTH, M_SUN
-from .model import canon_planet, near_resonances
+from .constants import AU_KM, DAY_S, G, G_EARTH, M_EARTH, M_SUN
+from .model import Planet, near_resonances
 
-DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "aureth.yaml"
-K2 = 2.959122082855911e-4            # G in AU^3 / (solar mass day^2)
+K2 = G * M_SUN * DAY_S**2 / (AU_KM * 1e3) ** 3      # G in AU^3 / (solar mass day^2), from the same constants as the rest of the model
 AU_PER_DAY_KMS = AU_KM / 86400.0     # 1 AU/day in km/s
 EARTH_IN_SUN = M_EARTH / M_SUN
 COLORS = {"Bayurinda": "#4cc9f0", "Ashara": "#ffb703", "Tarnic": "#e5383b"}
@@ -50,33 +47,15 @@ class Body:
         return math.sqrt(2 * G * self.mass_earth * M_EARTH / (self.radius_km * 1e3)) / 1e3
 
 
-def load_system(path: Path = DATA_FILE) -> tuple[Star, list[Body]]:
-    """Star and the planets that have a distance (Bayurinda, Ashara, Tarnic for now)."""
-    d = yaml.safe_load(Path(path).read_text())
-    pl = canon_planet()
-    star = Star(d["star"]["name"], pl.star_mass_msun, d["star"]["luminosity_lsun"], d["star"]["radius_rsun"])
-    start = d.get("system_start", {})
-    phases = start.get("phase_deg", {})
-    inc = float(start.get("inclination_deg", 0.0))
-    bodies: list[Body] = []
-    for p in d["planets"]:
-        if p.get("distance_au") is None:
-            continue
-        name = p["name"]
-        radius = p["diameter_km"] / 2 if p.get("diameter_km") else None
-        if name == "Bayurinda":
-            a, mass = pl.a_au, pl.mass_earth                  # exact values behind the 440-day year
-        else:
-            a = float(p["distance_au"])
-            mass = p.get("mass_earth")
-            if mass is None and radius and p.get("gravity_g"):
-                mass = p["gravity_g"] * G_EARTH * (radius * 1e3) ** 2 / G / M_EARTH
-        note = ""
-        if name == "Ashara":
-            note = "eccentricity is a placeholder"
-        bodies.append(Body(name, a, float(p.get("eccentricity", 0.0)), float(mass), radius, p.get("day_hours"),
-                           float(phases.get(name, 0.0)), 0.0, 0.0, inc, note))
-    return star, bodies
+def star_of(pl: Planet) -> Star:
+    """The star as the planet's own numbers describe it (every planet in a world carries the same star)."""
+    return Star("Aureth", pl.star_mass_msun, pl.star_luminosity_lsun, pl.star_radius_rsun)
+
+
+def body_from_planet(pl: Planet) -> Body:
+    """The same planet described for the orbit and flight calculations."""
+    return Body(pl.name, pl.a_au, pl.ecc, pl.mass_earth, pl.radius_km, pl.solar_day_hours, pl.mean_anomaly_deg, 0.0, 0.0, 0.0,
+                pl.placeholder_note)
 
 
 def mu_of(star: Star, body: Body) -> float:
@@ -134,13 +113,14 @@ def all_positions(star: Star, bodies: list[Body], t_days) -> np.ndarray:
 # ------------------------------------------------------------------ N-body
 
 def build_nbody(star: Star, bodies: list[Body]):
+    """The star and the planets only (moons count as part of their planet). Same units and constants as the full simulation."""
     import rebound
 
     sim = rebound.Simulation()
-    sim.units = ("day", "AU", "Msun")
-    sim.add(m=star.mass_msun)
+    sim.units = ("day", "km", "kg")
+    sim.add(m=star.mass_msun * M_SUN)
     for b in bodies:
-        sim.add(m=b.mass_msun, a=b.a_au, e=b.ecc, inc=math.radians(b.inc_deg), Omega=math.radians(b.node_deg),
+        sim.add(m=b.mass_earth * M_EARTH, a=b.a_au * AU_KM, e=b.ecc, inc=math.radians(b.inc_deg), Omega=math.radians(b.node_deg),
                 omega=math.radians(b.peri_deg), M=math.radians(b.phase_deg), primary=sim.particles[0])
     sim.move_to_com()
     return sim
@@ -160,10 +140,54 @@ def nbody_track(star: Star, bodies: list[Body], times_days: np.ndarray, integrat
         s = np.array([ps[0].x, ps[0].y, ps[0].z])
         for k in range(len(bodies)):
             p = ps[k + 1]
-            pos[i, k] = np.array([p.x, p.y, p.z]) - s
+            pos[i, k] = (np.array([p.x, p.y, p.z]) - s) / AU_KM
             o = p.orbit(primary=ps[0])
-            a[i, k], e[i, k] = o.a, o.e
+            a[i, k], e[i, k] = o.a / AU_KM, o.e
     return {"t": np.asarray(times_days, float), "pos": pos, "a": a, "e": e}
+
+
+class Ephemeris:
+    """Where each planet is at any moment, from one N-body run (cubic interpolation between daily samples).
+
+    It answers the same question as `state` (position in AU and velocity in AU/day relative to the star) but includes the
+    planets' pull on each other, so it agrees with the full simulation used on the planet page."""
+
+    def __init__(self, star: Star, bodies: list[Body], span_days: float, step: float = 1.0):
+        sim = build_nbody(star, bodies)
+        sim.integrator = "whfast"
+        sim.dt = min(2.0, 0.02 * min(period_days(star, b) for b in bodies))
+        self.names = [b.name for b in bodies]
+        self.t = np.arange(0.0, span_days + step, step)
+        n = len(self.t)
+        self.pos = np.zeros((n, len(bodies), 3))
+        self.vel = np.zeros((n, len(bodies), 3))
+        for i, t in enumerate(self.t):
+            sim.integrate(float(t), exact_finish_time=1)
+            ps = sim.particles
+            s0 = ps[0]
+            for k in range(len(bodies)):
+                p = ps[k + 1]
+                self.pos[i, k] = (p.x - s0.x, p.y - s0.y, p.z - s0.z)
+                self.vel[i, k] = (p.vx - s0.vx, p.vy - s0.vy, p.vz - s0.vz)
+        self.pos /= AU_KM
+        self.vel /= AU_KM
+
+    def state(self, star: Star, body: Body, t_days) -> tuple[np.ndarray, np.ndarray]:
+        t = np.atleast_1d(np.asarray(t_days, float))
+        k = self.names.index(body.name)
+        h = self.t[1] - self.t[0]
+        i = np.clip(np.floor((t - self.t[0]) / h).astype(int), 0, len(self.t) - 2)
+        u = ((t - self.t[i]) / h)[:, None]
+        p0, p1, v0, v1 = self.pos[i, k], self.pos[i + 1, k], self.vel[i, k] * h, self.vel[i + 1, k] * h
+        h00, h10, h01, h11 = 2 * u**3 - 3 * u**2 + 1, u**3 - 2 * u**2 + u, -2 * u**3 + 3 * u**2, u**3 - u**2
+        pos = h00 * p0 + h10 * v0 + h01 * p1 + h11 * v1
+        d00, d10, d01, d11 = 6 * u**2 - 6 * u, 3 * u**2 - 4 * u + 1, -6 * u**2 + 6 * u, 3 * u**2 - 2 * u
+        vel = (d00 * p0 + d10 * v0 + d01 * p1 + d11 * v1) / h
+        return pos, vel
+
+    def positions(self, t_days) -> np.ndarray:
+        t = np.atleast_1d(np.asarray(t_days, float))
+        return np.stack([self.state(None, Body(n, 0, 0, 0, None, None), t)[0] for n in self.names], axis=1)
 
 
 # ------------------------------------------------------------------ cycles, sunlight, sky
@@ -239,10 +263,10 @@ def conjunction_minima(t: np.ndarray, sep_deg: np.ndarray, limit_deg: float) -> 
     return out
 
 
-def grand_alignments(star: Star, bodies: list[Body], years: float, tol_deg: float = 10.0, step: float = 2.0) -> list[dict]:
+def grand_alignments(star: Star, bodies: list[Body], years: float, tol_deg: float = 10.0, step: float = 2.0, eph: "Ephemeris | None" = None) -> list[dict]:
     """Times when all planets lie within `tol_deg` of the same heliocentric direction."""
     t = np.arange(0, years * 365.25, step)
-    pos = all_positions(star, bodies, t)
+    pos = eph.positions(t) if eph is not None else all_positions(star, bodies, t)
     lon = np.degrees(np.arctan2(pos[:, :, 1], pos[:, :, 0]))
     ref = lon[:, :1]
     off = (lon - ref + 180) % 360 - 180

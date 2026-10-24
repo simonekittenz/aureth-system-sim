@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 import plotly.graph_objects as go
 
-from .aureth import COLORS, load_system, state
+from .aureth import COLORS
 from .dynamics import build_simulation
 from .model import System, angular_diameter_deg
 from .sky import illuminated_fraction, phase_disc, spin_axis, surface_normal
@@ -42,12 +42,14 @@ def twilight_name(sun_alt: float) -> str:
     return "night"
 
 
-def moons_at(system: System, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Moon positions relative to the planet (n, 2, 3) and the star relative to the planet (n, 3), in km, at any times
-    (before or after the founding moment)."""
+def moons_at(system: System, times: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Moon positions relative to the planet (n, moons, 3), the star relative to the planet (n, 3) and the other planets
+    relative to the planet (n, planets, 3), in km, at any times (before or after the founding moment)."""
     times = np.asarray(times, float)
-    mp = np.zeros((len(times), 2, 3))
+    nm, nn = len(system.moons), len(system.neighbors)
+    mp = np.zeros((len(times), nm, 3))
     sp = np.zeros((len(times), 3))
+    op = np.zeros((len(times), nn, 3))
     for sign in (1, -1):
         idx = np.where(times >= 0)[0] if sign == 1 else np.where(times < 0)[0]
         if not len(idx):
@@ -59,9 +61,11 @@ def moons_at(system: System, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]
             ps = sim.particles
             pl = np.array([ps[1].x, ps[1].y, ps[1].z])
             sp[i] = np.array([ps[0].x, ps[0].y, ps[0].z]) - pl
-            for k in range(2):
+            for k in range(nm):
                 mp[i, k] = np.array([ps[2 + k].x, ps[2 + k].y, ps[2 + k].z]) - pl
-    return mp, sp
+            for k in range(nn):
+                op[i, k] = np.array([ps[2 + nm + k].x, ps[2 + nm + k].y, ps[2 + nm + k].z]) - pl
+    return mp, sp, op
 
 
 @dataclass
@@ -78,6 +82,7 @@ class SkyData:
     N: np.ndarray
     lat: float
     lon: float
+    day_hours: float = 19.0         # length of the planet's solar day
 
 
 def _altaz(v, U, E, N):
@@ -88,7 +93,7 @@ def _altaz(v, U, E, N):
 
 def compute_sky(system: System, lat: float, lon: float, day_total: float, start_hour: float = 0.0,
                 span_hours: float = 19.0, step_hours: float = 0.5) -> SkyData:
-    """The sky from (lat, lon) at a run of moments, in local mean solar time (a day is 19 hours).
+    """The sky from (lat, lon) at a run of moments, in local mean solar time (a day is `planet.solar_day_hours` long: 19 on Bayurinda).
 
     `day_total` counts days since the founding moment, which is local midnight on day 0 at longitude 0. The run starts
     `start_hour` hours into that day and lasts `span_hours`, with one frame every `step_hours`."""
@@ -97,14 +102,14 @@ def compute_sky(system: System, lat: float, lon: float, day_total: float, start_
     lat = max(-89.5, min(89.5, lat))
     n = int(round(span_hours / step_hours)) + 1
     hours = start_hour + step_hours * np.arange(n)
-    days = day_total + hours / 19.0
+    days = day_total + hours / pl.solar_day_hours
     t = (days - lon / 360.0) * D
     year_len = pl.year_solar_days
     days_r = np.round(days, 7)                              # avoid 0.99999999 showing as the end of the previous day
-    clock = (days_r - np.floor(days_r)) * 19.0
+    clock = (days_r - np.floor(days_r)) * pl.solar_day_hours
     labels = [f"year {int(np.floor(dd / year_len)) + 1}, day {int(np.floor(dd % year_len)) + 1}, "
               f"{int(c):02d}:{int(round((c % 1) * 60)) % 60:02d}" for dd, c in zip(days_r, clock)]
-    mp, sp = moons_at(system, t)
+    mp, sp, op = moons_at(system, t)
     s = spin_axis(pl)
     U = surface_normal(pl, lat, lon, t)
     E = np.cross(s, U)
@@ -130,18 +135,13 @@ def compute_sky(system: System, lat: float, lon: float, day_total: float, start_
         moons[m.name] = {"alt": alt, "az": az, "rad": np.degrees(np.arctan(m.radius_km / d)),
                          "k": illuminated_fraction(mp[:, k], sp), "limb_alt": l_alt, "limb_az": l_az, "dist_km": d}
 
-    star, bodies = load_system()
-    pos = {b.name: state(star, b, t)[0] for b in bodies}
     planets = {}
-    for b in bodies:
-        if b.name == "Bayurinda":
-            continue
-        v = pos[b.name] - pos["Bayurinda"]
-        v /= np.linalg.norm(v, axis=1, keepdims=True)
+    for k, nb in enumerate(system.neighbors):
+        v = op[:, k] / np.linalg.norm(op[:, k], axis=1, keepdims=True)
         a_, z_ = _altaz(v, U, E, N)
-        planets[b.name] = {"alt": a_, "az": z_}
+        planets[nb.name] = {"alt": a_, "az": z_}
 
-    return SkyData(t, clock, labels, sun, moons, planets, s, U, E, N, lat, lon)
+    return SkyData(t, clock, labels, sun, moons, planets, s, U, E, N, lat, lon, pl.solar_day_hours)
 
 
 # ------------------------------------------------------------------ drawing

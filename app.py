@@ -6,14 +6,14 @@ st.set_page_config(page_title="Aureth and Bajurinda", layout="wide")
 def reload_data():
     """Re-read everything in the data folder, keeping the settings and any unsaved constellation edits."""
     from bajurinda import nightsky
-    from bajurinda.aureth import load_system
     from bajurinda.constellations import clone, load_constellations
     from bajurinda.starfield import load_faint_settings, load_sky
 
     ss = st.session_state
+    from bajurinda.world import load_world
     try:                                    # check the files are readable before throwing away what is loaded
         load_sky.__wrapped__()
-        load_system()
+        load_world()
         load_faint_settings()
         fresh = load_constellations()
     except Exception as err:                # noqa: BLE001 - show whatever went wrong in the data file
@@ -35,7 +35,7 @@ def reload_data():
 
 
 pages = st.navigation([
-    st.Page("moons.py", title="Bayurinda moons", icon=":material/dark_mode:", default=True),
+    st.Page("planet_view.py", title="Planet view", icon=":material/public:", default=True),
     st.Page("system.py", title="Aureth system", icon=":material/wb_sunny:"),
 ])
 with st.sidebar:

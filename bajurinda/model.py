@@ -22,7 +22,7 @@ def mass_from_gravity(gravity_g: float, radius_km: float) -> float:
 
 @dataclass(frozen=True)
 class Planet:
-    name: str = "Bajurinda"
+    name: str = "Bayurinda"
     radius_km: float = 6000.0
     mass_kg: float = field(default_factory=lambda: mass_from_gravity(0.9, 6000.0))
     rotation_hours: float = 19.0
@@ -33,6 +33,8 @@ class Planet:
     star_mass_kg: float = 0.0
     star_luminosity_lsun: float = 1.0
     star_radius_rsun: float = 1.0
+    mean_anomaly_deg: float = 0.0       # where it is on its orbit at the founding moment (0 = closest to the star)
+    placeholder_note: str = ""          # what, if anything, about this planet is not settled
 
     @property
     def mass_earth(self) -> float:
@@ -186,8 +188,10 @@ class Moon:
 
 @dataclass(frozen=True)
 class System:
+    """One planet seen as the centre of attention: its moons, and the other planets that share the simulation."""
     planet: Planet
-    moons: tuple[Moon, Moon]
+    moons: tuple[Moon, ...] = ()
+    neighbors: tuple[Planet, ...] = ()
 
 
 def moon_period_days(planet: Planet, moon: Moon) -> float:

@@ -1,6 +1,6 @@
-# Bajurinda two-moon simulator
+# Aureth system simulator
 
-Interactive Streamlit app for designing Liwaya and Nineya, the moons of Bajurinda (*Alteria*).
+Interactive Streamlit app for the Aureth system in *Alteria*: the star, its planets, and Bayurinda's moons Liwaya and Nineya.
 
 ## Run
 
@@ -24,11 +24,23 @@ A browser tab opens at http://localhost:8501. Keep the Terminal window open whil
 
 ## Two pages
 
-- **Bayurinda moons** (`moons.py`): Liwaya and Nineya, their phases, tides, calendar, eclipses and stability.
+- **Planet view** (`planet_view.py`): pick a **point of view** (Bayurinda, Ashara or Tarnic) in the sidebar. You get that planet's
+  properties, seasons (Landmarks) and Night sky, with the other planets in its sky. Bayurinda also has its moons: phases, tides,
+  alignments, calendar, eras, eclipses and moon stability. Ashara and Tarnic have no moons in the world files yet, so those tabs are hidden.
 - **Aureth system** (`system.py`): the star with Bayurinda, Ashara and Tarnic: orbits, cycles and alignments, Bayurinda's
-  sky, Sternreyker flight times between planets (constant acceleration, 0.6 to 1.4 g), a ladder of long cycles, and long-run stability. The other planets join once they have a distance.
+  sky, Sternreyker flight times between planets (constant acceleration, 0.6 to 1.4 g), a ladder of long cycles, and long-run stability.
 
-`app.py` is only the router between them.
+`app.py` is only the router between them, plus the **Reload data files** button.
+
+### One model
+
+Both pages use the same world (`bajurinda/world.py`): one star, three planets, and Bayurinda's two moons. The sidebar settings are shared,
+so a change on one page shows on the other. Where positions are drawn they come from one REBOUND simulation: the Planet view runs the star,
+all the planets and the chosen planet's moons together, and the Aureth system page uses the same planets (the moons count as part of
+Bayurinda, since their tiny orbits would make thousand-year runs take hours). The planet and its moons are started so that their shared
+centre of mass follows the planet's orbit; without that the moons' pull stretched Bayurinda's year by 0.16%, and the planets in the
+night sky drifted from the Sun by half a degree a year. Quick formulas (resonances, the 75-year repeat, the coasting-flight comparison)
+still use idealised two-body orbits and are labelled as such. Ashara's axial tilt and day length are **placeholders**.
 
 ## Layout
 
@@ -36,17 +48,19 @@ A browser tab opens at http://localhost:8501. Keep the Terminal window open whil
 |---|---|
 | `bajurinda/constants.py` | Physical constants |
 | `bajurinda/model.py` | Planet and moon definitions, derived properties, Hill/Roche limits, tide scaling, warnings |
+| `bajurinda/world.py` | The whole system as one object (star, planets, moons); reads `data/aureth.yaml` |
+| `bajurinda/worldstate.py` | The sidebar settings shared by both pages |
 | `bajurinda/presets.py` | Candidate moon configurations (hypothetical, not canon) |
-| `bajurinda/dynamics.py` | REBOUND N-body integration, stability runs, random-phase ensembles |
+| `bajurinda/dynamics.py` | The REBOUND simulation (star, planets, moons), stability runs, random-phase ensembles |
 | `bajurinda/sky.py` | Phases, altitude, equilibrium tides, alignment events |
 | `bajurinda/plots.py` | Plotly figures for the moons page |
-| `bajurinda/aureth.py` | The star and planets: loading `data/aureth.yaml`, orbits, N-body, sky from Bayurinda, alignments |
+| `bajurinda/aureth.py` | The star and planets: orbits, the planets-only N-body and its ephemeris, sky from Bayurinda, alignments |
 | `bajurinda/flights.py` | Sternreyker flights: constant-acceleration flip-and-burn, Sun keep-out detours, best/worst timing |
 | `bajurinda/landmarks.py` | Horizon alignments: solstice sunrises, moon standstills, return cycles, star drift |
 | `bajurinda/cycles.py` | Long cycles: eclipse cycles, node turns, plane cycle, planet repeats, the Great Cycle, axis precession |
 | `bajurinda/transfers.py` | Coasting comparison (no wings): Lambert solver, Hohmann baseline, window finder |
 | `bajurinda/system_plots.py` | Plotly figures for the system page |
-| `app.py`, `moons.py`, `system.py` | The UI: router and the two pages |
+| `app.py`, `planet_view.py`, `system.py` | The UI: router and the two pages |
 
 ## Calendar tab
 

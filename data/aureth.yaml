@@ -21,16 +21,17 @@ star:
 # Cycles measured from the simulation (Bayurindan years of 440 solar days). Re-measure on the "Long cycles" tab after
 # changing any orbit. The planet cycles depend on Ashara's placeholder distance.
 long_cycles:
-  status: measured
+  status: measured         # remeasured when the planets and moons went onto one simulation. The earlier 14.26-year eclipse cycle and 19.4-year node
+                           # turn came from a small mismatch between two models' years, which a node turn (a difference of two near-equal rates) magnifies
   eclipse_year_days: 331
   double_full_moons: 2.8
-  liwaya_eclipse_cycle: {years: 14.26, months: 163, note: "= 178 node-to-node months = 326 closest-to-closest months, to 0.03 day"}
-  liwaya_node_turn: 19.4
-  planet_grand_alignments_avg: 37.3
-  moon_planes_line_up: 52.7
+  liwaya_eclipse_cycle: {years: 12.34, months: 141, note: "= 154 node-to-node months = 282 closest-to-closest months, to 0.07 day; 118 days off in the year"}
+  liwaya_node_turn: 18.7
+  planet_grand_alignments_avg: 38.2
+  moon_planes_line_up: 52.8
   planet_system_repeat: {years: 75.4, note: "13 Bayurinda-Ashara cycles = 31 Bayurinda-Tarnic = 18 Ashara-Tarnic"}
-  great_cycle: {years: 527, note: "7 planet repeats = 10 moon-plane cycles = 37 eclipse cycles, agreeing to 0.15%"}
-  axis_precession: {years: 12336, note: "moons do 78% of the pulling; assumes moment of inertia 0.33 (+-15%)"}
+  great_cycle: {years: 529, note: "7 planet repeats = 10 moon-plane cycles = 43 eclipse cycles, agreeing to 0.59% (it was 37 eclipse cycles to 0.15% before the remeasure)"}
+  axis_precession: {years: 12333, note: "moons do 78% of the pulling; assumes moment of inertia 0.33 (+-15%)"}
   orbit_eccentricity_cycle: {years: 23700, note: "eccentricity about 0.035 to 0.044, with Ashara at 0.3 Earth masses (was 172,000 years at 0.1)"}
   star_activity_cycle: {status: undecided, note: "not computed; the Sun's is 11 years"}
 
@@ -40,11 +41,11 @@ landmarks:
   sun: {winter_solstice_day: 0, spring_equinox_day: 104, summer_solstice_day: 220, autumn_equinox_day: 335,
         note: "the direction the axis leans relative to perihelion is a free choice; the founding moment is set as a northern winter solstice at perihelion"}
   liwaya_declination_range_deg: [14.5, 17.5]       # obliquity 16 +- its 1.5 degree tilt
-  liwaya_major_standstill_every_years: 19
-  nineya_declination_range_deg: [9, 23]            # swings with the 52.7-year plane cycle
+  liwaya_major_standstill_every_years: 18.7
+  nineya_declination_range_deg: [9, 23]            # swings with the 52.8-year plane cycle
   calendar_repeat: "7 years = 80 Liwaya months exactly (38.5-day months, 440-day years): same phase, hour and date"
-  eclipse_repeat_years: 14.26                      # same phase, node and distance, but 91 days off in the year
-  axis_wobble_years: 12336                         # a fixed star's rising point creeps up to 0.8 degrees per century
+  eclipse_repeat_years: 12.34                      # same phase, node and distance, but 118 days off in the year
+  axis_wobble_years: 12333                         # a fixed star's rising point creeps up to 0.8 degrees per century
 
 # Interplanetary flight (lore from the author's worldbuilding discussions, not yet in the world files).
 # A Weltreyker launches the vessel; once airborne and "nearing", a Sternreyker pilot's ethereal aspect wings change the
@@ -168,7 +169,7 @@ planets:
     moon_pairing:
       status: decision
       repeat_solar_days: 1232  # 32 Liwaya cycles = 127 Nineya cycles = 2.80 years; deliberately not tied to the year
-      plane_realignment_years: 52.7   # measured for the current tuning (minima at years 52.7, 105.4, 158.0, 210.7)
+      plane_realignment_years: 52.8   # measured for the current tuning (minima at years 52.8, 105.7, 158.5, 211.3)
       solar_eclipses: Liwaya 83% total among central eclipses (Sun looks 0.541 deg, Liwaya 0.545); Nineya rings only
   - name: Ashara
     rank: 4
@@ -176,6 +177,9 @@ planets:
     distance_au: 1.1
     status: decision           # rank implies it lies between Bayurinda and Tarnic
     eccentricity: 0.03         # PLACEHOLDER: not settled
+    axial_tilt_deg: 20         # PLACEHOLDER: not settled (the planet view needs a tilt to work out a sky)
+    day_hours: 24              # PLACEHOLDER: not settled (solar day)
+    placeholders: [eccentricity, axial_tilt_deg, day_hours]
     mass_earth: 0.3            # decision: raised from 0.1; with a dense iron-rich core (5.5 g/cc) the compact equivalent has
                                # radius ~4,270 km, 0.67 g and a 7.5 km/s escape speed, enough to hold a tall breathable atmosphere
     density_gcc: 5.5           # decision: denser core (also the source of the magnetic field that shields the shared air)

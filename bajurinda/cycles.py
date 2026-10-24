@@ -39,7 +39,9 @@ def moon_cycles(system: System, years: int = 250, step: float = 0.25) -> dict:
             m, a = round(n * syn / draconic), round(n * syn / anomalistic)
             cands.append((n, m, a, abs(n * syn - m * draconic), abs(n * syn - a * anomalistic)))
         cands.sort(key=lambda c: c[3] + 0.5 * c[4])
-        best = cands[0]
+        good = [c for c in cands if c[3] < 0.1 and c[4] < 0.1]      # repeats to within a tenth of a day on both counts
+        best = min(good, key=lambda c: c[0]) if good else cands[0]    # the shortest such cycle (steadier than the single smallest error)
+        cands = [best] + [x for x in cands if x is not best]
         out[moon.name] = {"synodic": syn, "draconic": draconic, "anomalistic": anomalistic, "eclipse_year": eclipse_year,
                           "node_regression_years": 1 / regress / Y, "cycle_months": best[0], "cycle_draconic": best[1],
                           "cycle_anomalistic": best[2], "cycle_off_days": best[3], "cycle_years": best[0] * syn / Y,

@@ -10,22 +10,39 @@ import streamlit as st
 
 from bajurinda import system_plots as sp
 from bajurinda.aureth import (
-    AU_KM, COLORS, K2, Body, Star, all_positions, conjunction_minima, crossing_times, grand_alignments, load_system,
+    AU_KM, COLORS, K2, Body, Ephemeris, Star, conjunction_minima, crossing_times, grand_alignments,
     nbody_track, pair_table, period_days, planet_table, sky_from, synodic_days,
 )
 from bajurinda.cycles import axial_precession, great_cycle, moon_cycles, orbit_secular, plane_cycle_years, planet_repeat
 from bajurinda.flights import route_extremes, scan_route
-from bajurinda.model import System, canon_planet
-from bajurinda.presets import DEFAULT_PRESET, PRESETS
+from bajurinda.world import load_world
+from bajurinda.worldstate import ensure_state, orbit_editor, remember, star_editor, world_from_state
 from bajurinda.transfers import find_windows, hohmann, porkchop
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-STAR0, BODIES0 = load_system()
-BAY = next(b for b in BODIES0 if b.name == "Bayurinda")
-YEAR = period_days(STAR0, BAY)              # Bayurindan year, Earth days (440 solar days)
-DAY = 19 / 24                               # Bayurindan solar day, Earth days
-NAMES = [b.name for b in BODIES0]
+BASE = load_world()
+ss = st.session_state
+ensure_state(BASE)
+
+with st.sidebar:
+    st.subheader("Aureth system")
+    st.caption("The same star and planets as on the Planet view page: a change made here shows there too.")
+    with st.expander("Star (Aureth)"):
+        star_editor(BASE)
+    for p_ in BASE.planets:
+        with st.expander(p_.name + ("  (some values unsettled)" if p_.placeholder_note else "")):
+            orbit_editor(p_, BASE)
+remember()
+
+world = world_from_state(BASE)
+STAR = world.star
+BODIES = world.bodies()
+BY = {b.name: b for b in BODIES}
+NAMES = [b.name for b in BODIES]
+BAYURINDA = world.planet("Bayurinda")
+YEAR = BAYURINDA.year_days                          # Bayurindan year, Earth days (440 solar days)
+DAY = BAYURINDA.solar_day_hours / 24                # Bayurindan solar day, Earth days
 
 
 def when(t_days: float) -> str:
@@ -34,44 +51,15 @@ def when(t_days: float) -> str:
     return f"year {y}, day {d}"
 
 
-def reset_system():
-    for b in BODIES0:
-        st.session_state.update({f"sys_{b.name}_a": float(b.a_au), f"sys_{b.name}_e": float(b.ecc),
-                                 f"sys_{b.name}_m": float(b.mass_earth), f"sys_{b.name}_ph": float(b.phase_deg)})
+@st.cache_data(show_spinner="Following the planets...")
+def get_eph(star: Star, bodies: tuple[Body, ...], span_days: float, step: float = 1.0):
+    return Ephemeris(star, list(bodies), span_days, step)
 
-
-ss = st.session_state
-for _k, _v in ss.get("_sys_saved", {}).items():      # see moons.py: Streamlit drops widget values when another page is shown
-    if _k not in ss:
-        ss[_k] = _v
-if "sys_Bayurinda_a" not in ss:
-    reset_system()
-
-with st.sidebar:
-    st.subheader("Aureth system")
-    st.caption("Star: mass 1.0021 solar, luminosity 0.87, radius 0.985 (set on the moons page / data file).")
-    st.button("Reset planets", on_click=reset_system, key="sys_reset")
-    for b in BODIES0:
-        with st.expander(b.name + ("  (eccentricity unsettled)" if b.placeholder_note else "")):
-            st.number_input("Distance (AU)", 0.3, 5.0, step=0.01, format="%.4f", key=f"sys_{b.name}_a")
-            st.slider("Eccentricity", 0.0, 0.4, step=0.005, key=f"sys_{b.name}_e")
-            st.number_input("Mass (Earth masses)", 0.01, 30.0, step=0.01, key=f"sys_{b.name}_m")
-            st.slider("Position at the founding moment (deg of orbit)", 0.0, 360.0, step=1.0, key=f"sys_{b.name}_ph",
-                      help="0 puts the planet at its closest point to Aureth on the shared starting line.")
-            if b.placeholder_note:
-                st.caption(f"Not settled: {b.placeholder_note}.")
-
-ss["_sys_saved"] = {k: v for k, v in ss.items() if k.startswith("sys_") and k not in ("sys_stab", "sys_reset")}
-
-STAR = STAR0
-BODIES = [replace(b, a_au=ss[f"sys_{b.name}_a"], ecc=ss[f"sys_{b.name}_e"], mass_earth=ss[f"sys_{b.name}_m"],
-                  phase_deg=ss[f"sys_{b.name}_ph"]) for b in BODIES0]
-BY = {b.name: b for b in BODIES}
 
 st.title("Aureth system")
 st.caption("Time is counted from the founding moment (the double full moon), when the star, Bayurinda, Ashara and Tarnic "
-           "start in a line. Dates read 'year, day' in Bayurindan years of 440 solar days. Orbits are flat and coplanar "
-           "(a placeholder), and Ashara's eccentricity is a placeholder.")
+           f"start in a line. Dates read 'year, day' in Bayurindan years of {BAYURINDA.year_solar_days:.0f} solar days. Orbits are flat and coplanar "
+           "(a placeholder), and Ashara's eccentricity is a placeholder. Planet positions come from one N-body simulation, the same one the Planet view uses.")
 
 tabs = st.tabs(["Orbits", "Cycles", "Sky from Bayurinda", "Transfers", "Long cycles", "Stability"])
 
@@ -116,7 +104,7 @@ with tabs[1]:
     g1, g2 = st.columns(2)
     g_years = g1.select_slider("Look ahead (Earth years)", [100, 300, 1000, 3000], value=300)
     g_tol = g2.slider("All planets within (degrees of each other, seen from the star)", 3, 40, 12)
-    al = grand_alignments(STAR, BODIES, g_years, g_tol)
+    al = grand_alignments(STAR, BODIES, g_years, g_tol, eph=get_eph(STAR, tuple(BODIES), g_years * 365.25 + 10, 2.0))
     if al:
         st.dataframe(pd.DataFrame([{"When": when(a["t"]), "Earth years": round(a["t"] / 365.25, 1),
                                     "Tightest spread (deg)": round(a["spread_deg"], 1), "Lasts (days)": round(a["length_days"])} for a in al]),
@@ -134,7 +122,7 @@ with tabs[2]:
     st.subheader("What Bayurinda's sky shows")
     s_years = st.select_slider("Years to look at (Earth years)", [5, 10, 20, 40, 80], value=20, key="sky_years")
     t = np.arange(0, s_years * 365.25, 1.0)
-    pos = all_positions(STAR, BODIES, t)
+    pos = get_eph(STAR, tuple(BODIES), s_years * 365.25 + 5).positions(t)
     sky = sky_from(pos, NAMES, "Bayurinda")
     opp, rows = {}, []
     for n, d in sky.items():
@@ -190,18 +178,20 @@ with tabs[3]:
     g_mid = st.slider("Your own pilot's acceleration (g)", 0.3, 2.0, 1.0, step=0.1)
     levels = {f"novice {G_NOV} g": G_NOV, f"your pilot {g_mid} g": g_mid, f"expert {G_EXP} g": G_EXP}
 
+    EPH = get_eph(STAR, tuple(BODIES), span_days + 400.0)
+
     @st.cache_data(show_spinner="Working out the flights...")
     def get_extremes(star: Star, bodies: tuple[Body, ...], span: float, keep_au: float):
         out = {}
         by = {b.name: b for b in bodies}
         for o, d in (("Bayurinda", "Ashara"), ("Ashara", "Tarnic"), ("Bayurinda", "Tarnic")):
             for g in (G_NOV, G_EXP):
-                out[(o, d, g)] = route_extremes(star, by[o], by[d], g, span, keep_au)
+                out[(o, d, g)] = route_extremes(star, by[o], by[d], g, span, keep_au, eph=EPH)
         return out
 
     @st.cache_data(show_spinner="Scanning departure dates...")
     def get_scan(star: Star, o: Body, d: Body, g: float, span: float, keep_au: float):
-        return scan_route(star, o, d, g, span, keep_au)
+        return scan_route(star, o, d, g, span, keep_au, eph=EPH)
 
     ext = get_extremes(STAR, tuple(BODIES), span_days, keep)
     ov = over_h / 24
@@ -273,16 +263,17 @@ with tabs[4]:
     sig = tuple(BODIES)
     if st.button("Measure the long cycles"):
         with st.spinner("Following the moons and planets..."):
-            sysm = System(canon_planet(), (PRESETS[DEFAULT_PRESET][1], PRESETS[DEFAULT_PRESET][2]))
+            sysm = world.system("Bayurinda")
             mc = moon_cycles(sysm)
             pcy = plane_cycle_years(sysm)
             rep = planet_repeat(STAR, BODIES)
-            als = grand_alignments(STAR, BODIES, 1000, 12)
+            als = grand_alignments(STAR, BODIES, 1000, 12, eph=get_eph(STAR, tuple(BODIES), 1000 * 365.25 + 10, 2.0))
             gaps = np.diff([a["t"] for a in als]) / YEAR if len(als) > 1 else np.array([np.nan])
             ax = axial_precession(sysm)
             sec = orbit_secular(STAR, BODIES)
             lw = mc["Liwaya"]
-            gc = great_cycle({"planets": rep["years"], "planes": pcy, "eclipses": lw["cycle_years"]}) if rep and pcy else None
+            gp = {"planets": rep["years"], "planes": pcy, "eclipses": lw["cycle_years"]} if rep and pcy else None
+            gc = (great_cycle(gp) or great_cycle(gp, tol=0.01)) if gp else None      # a strict fit first, then a looser one
             st.session_state["sys_cycles"] = dict(sig=sig, mc=mc, plane=pcy, rep=rep, align=float(np.nanmean(gaps)), ax=ax, sec=sec, gc=gc)
     cy = st.session_state.get("sys_cycles")
     if cy is None:

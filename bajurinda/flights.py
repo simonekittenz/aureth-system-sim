@@ -4,19 +4,21 @@ import math
 
 import numpy as np
 
-from .aureth import AU_KM, K2, Body, Star, state
+from .aureth import AU_KM, K2, Body, Star
+from .aureth import state as _kepler_state
 
 G1 = 9.80665 * 86400.0**2 / (AU_KM * 1e3)       # one g in AU / day^2
 AU_DAY_KMS = AU_KM / 86400.0
 
 
-def straight_flight(star: Star, origin: Body, dest: Body, t0, a_g: float, iters: int = 8) -> dict:
+def straight_flight(star: Star, origin: Body, dest: Body, t0, a_g: float, iters: int = 8, eph=None) -> dict:
     """Constant-acceleration flip-and-burn from `origin` to `dest`, leaving at t0 (Earth days from the founding moment).
 
     The ship accelerates at a_g until halfway along the line, then brakes to arrive at rest relative to the destination.
     The planets follow their exact orbits; their motion during the flight is included. The Sun's pull is ignored (it is
     under 1% of a pilot's acceleration at planetary distances), and the line is flown straight.
     """
+    state = eph.state if eph is not None else _kepler_state
     t0 = np.atleast_1d(np.asarray(t0, float))
     a = a_g * G1
     ro, vo = state(star, origin, t0)
@@ -41,14 +43,15 @@ def straight_flight(star: Star, origin: Body, dest: Body, t0, a_g: float, iters:
 
 
 def detour_flight(star: Star, origin: Body, dest: Body, t0: float, a_g: float, keep_au: float,
-                  N: int = 16, sub: int = 3) -> float | None:
+                  N: int = 16, sub: int = 3, eph=None) -> float | None:
     """Fastest flight at constant thrust magnitude (free direction, Sun's gravity included) that never comes
     within `keep_au` of the star. Returns days, or None if the optimiser did not converge."""
     from scipy.optimize import minimize
 
+    state = eph.state if eph is not None else _kepler_state
     a = a_g * G1
     mu = K2 * star.mass_msun
-    sf = straight_flight(star, origin, dest, t0, a_g)
+    sf = straight_flight(star, origin, dest, t0, a_g, eph=eph)
     T0 = float(sf["T"][0])
     ro, vo = state(star, origin, t0)
     ro, vo = ro[0][:2], vo[0][:2]
@@ -93,21 +96,21 @@ def detour_flight(star: Star, origin: Body, dest: Body, t0: float, a_g: float, k
     return best
 
 
-def scan_route(star: Star, origin: Body, dest: Body, a_g: float, span_days: float, keep_au: float, step: float = 1.0) -> dict:
+def scan_route(star: Star, origin: Body, dest: Body, a_g: float, span_days: float, keep_au: float, step: float = 1.0, eph=None) -> dict:
     t0 = np.arange(0, span_days, step)
-    f = straight_flight(star, origin, dest, t0, a_g)
+    f = straight_flight(star, origin, dest, t0, a_g, eph=eph)
     f["blocked"] = f["closest_au"] < keep_au
     return f
 
 
-def route_extremes(star: Star, origin: Body, dest: Body, a_g: float, span_days: float, keep_au: float) -> dict:
+def route_extremes(star: Star, origin: Body, dest: Body, a_g: float, span_days: float, keep_au: float, eph=None) -> dict:
     """Best and worst departure over the span. The worst case is re-solved with a curved route when the Sun is in the way."""
-    f = scan_route(star, origin, dest, a_g, span_days, keep_au)
+    f = scan_route(star, origin, dest, a_g, span_days, keep_au, eph=eph)
     ib, iw = int(np.argmin(f["T"])), int(np.argmax(f["T"]))
     worst = float(f["T"][iw])
     detour = False
     if f["blocked"][iw]:
-        d = detour_flight(star, origin, dest, float(f["t0"][iw]), a_g, keep_au)
+        d = detour_flight(star, origin, dest, float(f["t0"][iw]), a_g, keep_au, eph=eph)
         if d is not None:
             worst, detour = d, True
         else:

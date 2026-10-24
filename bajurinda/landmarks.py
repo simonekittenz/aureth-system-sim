@@ -27,10 +27,8 @@ def sun_markers(system: System, year_days_solar: int = 440, step: float = 0.25) 
     pl = system.planet
     D = pl.local_day_days
     t = np.arange(0, pl.year_days + 5, step)
-    from .aureth import load_system, state
-    star, bodies = load_system()
-    bay = next(b for b in bodies if b.name == "Bayurinda")
-    pos, _ = state(star, bay, t)
+    from .aureth import body_from_planet, star_of, state
+    pos, _ = state(star_of(pl), body_from_planet(pl), t)
     sun = -pos / np.linalg.norm(pos, axis=1, keepdims=True)
     dec = np.degrees(np.arcsin(np.clip(sun @ spin_axis(pl), -1, 1)))
     n = int(pl.year_days / step)
