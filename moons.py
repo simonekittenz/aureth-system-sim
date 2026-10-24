@@ -15,7 +15,7 @@ from bajurinda.cycles import axial_precession, moon_cycles
 from bajurinda.landmarks import (
     moon_declination_envelope, rise_offset_deg, return_cycles, star_alignment_life, sun_markers,
 )
-from bajurinda.nightsky import compute_sky, find_sight, readout, sky_figure
+from bajurinda.nightsky import compute_sky, day_crossings, find_sight, readout, sky_figure
 from bajurinda.eras import era_bands, era_summary, eras_data
 from bajurinda.lunar_calendar import build_calendar
 from bajurinda.dynamics import integrate, mean_rates, phase_ensemble, stability_run
@@ -615,6 +615,13 @@ with tabs[9]:
     st.caption("Drag the slider under the picture or press Play to run through the whole 19-hour day. Faded objects are below the horizon; "
                "the bright side of each moon faces Aureth. Nineya is close enough that where you stand shifts it against the sky.")
     st.dataframe(pd.DataFrame(readout(sky, idx)), hide_index=True, width="stretch")
+    cx = {k: v for k, v in day_crossings(sky).items() if v and k in ("Aureth", "Liwaya", "Nineya")}
+    if len({v["rightward"] for v in cx.values()}) > 1:
+        who = lambda r: ", ".join(k for k, v in cx.items() if v["rightward"] == r)
+        st.info(f"Everything still rises in the east and sets in the west, but {who(True)} cross{'es' if len(who(True).split(', ')) == 1 else ''} "
+                f"south of the zenith and drift left to right on the panorama, while {who(False)} cross{'es' if len(who(False).split(', ')) == 1 else ''} "
+                "north of it and drift right to left. At low latitudes, with a 16° axial tilt, bodies can pass on either side of the zenith. "
+                "The dotted paths and arrows show each one's route today.")
     if ss["v_sky_year"] == 1 and ss["v_sky_day"] == 1 and ss["v_sky_clock"] == 0.0:
         st.caption("This is the founding moment: Liwaya and Nineya full, overlapping, almost overhead, with Ashara and Tarnic in the same line and Aureth directly beneath.")
 

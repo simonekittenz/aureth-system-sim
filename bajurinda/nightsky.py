@@ -281,6 +281,40 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
                 lab.append((rel + off, name))
         fig.add_trace(go.Scatter(x=[l[0] for l in lab], y=[-4] * len(lab), mode="text", text=[l[1] for l in lab],
                                  textfont=dict(color="#ced4da", size=14), hoverinfo="skip", showlegend=False))
+    # each body's path across the day, with an arrow showing which way it goes
+    tracks = [("Aureth", d.sun["alt"], d.sun["az"], "255,209,102")] + [
+        (n, m["alt"], m["az"], ",".join(str(v) for v in MOON_TINT[n])) for n, m in d.moons.items()]
+    for name, alt, az, rgb in tracks:
+        X, Y = proj.xy(alt, az)
+        px, py, run = [], [], []
+        for q in range(len(alt)):
+            if alt[q] > 0 and not (run and view != "dome" and abs(X[q] - X[run[-1]]) > 90):
+                run.append(q)
+            else:
+                if len(run) > 1:
+                    px += list(X[run]) + [None]; py += list(Y[run]) + [None]
+                run = [q] if alt[q] > 0 else []
+        if len(run) > 1:
+            px += list(X[run]) + [None]; py += list(Y[run]) + [None]
+        fig.add_trace(go.Scatter(x=px, y=py, mode="lines", line=dict(color=f"rgba({rgb},0.5)", width=2, dash="dot"),
+                                 hovertemplate=f"{name}'s path today<extra></extra>", showlegend=False))
+        # arrow three quarters of the way along the longest stretch
+        best, cur = [], []
+        for q in range(len(alt)):
+            if alt[q] > 0:
+                cur.append(q)
+            else:
+                best = cur if len(cur) > len(best) else best
+                cur = []
+        best = cur if len(cur) > len(best) else best
+        if len(best) >= 4:
+            m = best[int(0.7 * (len(best) - 1))]
+            idx3 = [m - 1, m, m + 1]
+            fig.add_trace(go.Scatter(x=[float(X[q]) for q in idx3], y=[float(Y[q]) for q in idx3], mode="markers",
+                                     marker=dict(symbol="arrow", angleref="previous", size=[0, 13, 0], color=f"rgba({rgb},0.9)"),
+                                     hoverinfo="skip", showlegend=False))
+        else:
+            fig.add_trace(go.Scatter(x=[], y=[], mode="markers", hoverinfo="skip", showlegend=False))
     # dynamic objects
     fig.add_trace(go.Scatter(x=first[4]["x"], y=first[4]["y"], fill="toself", mode="lines", line=dict(width=0), fillcolor=first[4]["fillcolor"], hoverinfo="skip", showlegend=False))
     fig.add_trace(go.Scatter(x=first[5]["x"], y=first[5]["y"], fill="toself", mode="lines", line=dict(width=0), fillcolor=first[5]["fillcolor"], hoverinfo="skip", showlegend=False))
@@ -294,11 +328,12 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
         base += 3
     fig.add_trace(go.Scatter(x=first[base]["x"], y=first[base]["y"], mode="markers+text", text=first[base]["text"], textposition="top center",
                              textfont=dict(color="#e9ecef", size=11), marker=first[base]["marker"], hoverinfo="skip", showlegend=False))
-    # figure traces: 0 sky, 1 stars, 2 ground, 3 grid, 4 compass, then the Sun's two glows, disc and label, the moons, the planets.
-    # A frame key k >= 4 therefore lives at figure trace k + 1.
+    # figure traces: 0 sky, 1 stars, 2 ground, 3 grid, 4 compass, then the day's paths and arrows, then the Sun's two glows, disc and label,
+    # the moons, the planets. A frame key k >= 4 therefore lives at figure trace k + 1 + the number of path traces.
+    n_track_traces = 2 * (1 + n_moons)           # a path line and an arrow for the Sun and each moon
     fig_idx = {0: 0, 1: 1}
     for k in [4, 5, 6, 7] + list(range(8, 8 + 3 * n_moons + 1)):
-        fig_idx[k] = k + 1
+        fig_idx[k] = k + 1 + n_track_traces
 
     frames = []
     for i in range(len(d.clock)):
@@ -332,21 +367,57 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
     return fig
 
 
+def day_crossings(d: SkyData) -> dict:
+    """For each body, how it crosses the sky today: which side of the zenith, and which way it drifts on the panorama."""
+    out = {}
+    series = {"Aureth": (d.sun["alt"], d.sun["az"])}
+    series.update({n: (m["alt"], m["az"]) for n, m in d.moons.items()})
+    series.update({n: (p["alt"], p["az"]) for n, p in d.planets.items()})
+    for name, (alt, az) in series.items():
+        up = alt > 0
+        runs, i = [], 0
+        while i < len(up):
+            if up[i]:
+                j = i
+                while j + 1 < len(up) and up[j + 1]:
+                    j += 1
+                runs.append((i, j))
+                i = j + 1
+            else:
+                i += 1
+        if not runs:
+            out[name] = None
+            continue
+        i, j = max(runs, key=lambda r: alt[r[0]:r[1] + 1].max())
+        z = np.degrees(np.unwrap(np.radians(az[i:j + 1])))
+        top = az[i:j + 1][int(np.argmax(alt[i:j + 1]))]
+        north = top < 90 or top > 270
+        out[name] = {"side": "north" if north else "south", "rightward": bool(z[-1] - z[0] > 0),
+                     "peak": float(alt[i:j + 1].max())}
+    return out
+
+
 def readout(d: SkyData, i: int) -> list[dict]:
     def compass(az):
         return COMPASS[int(((az + 22.5) % 360) // 45)]
+    cross = day_crossings(d)
+    def how(name):
+        c = cross.get(name)
+        if c is None:
+            return "stays below the horizon today"
+        return f"passes {c['side']} of the zenith ({'left to right' if c['rightward'] else 'right to left'} in the panorama)"
     rows = []
     sa = float(d.sun["alt"][i])
     rows.append({"Object": "Aureth", "Height above the horizon": f"{sa:+.1f}°", "Direction": f"{float(d.sun['az'][i]):.0f}° {compass(float(d.sun['az'][i]))}",
-                 "Looks": f"{2 * float(d.sun['rad'][i]):.3f}° wide", "Notes": twilight_name(sa)})
+                 "Looks": f"{2 * float(d.sun['rad'][i]):.3f}° wide", "Notes": twilight_name(sa), "Today it": how("Aureth")})
     for name, mo in d.moons.items():
         a = float(mo["alt"][i])
         rows.append({"Object": name, "Height above the horizon": f"{a:+.1f}°", "Direction": f"{float(mo['az'][i]):.0f}° {compass(float(mo['az'][i]))}",
-                     "Looks": f"{2 * float(mo['rad'][i]):.3f}° wide", "Notes": f"{float(mo['k'][i]):.0%} lit" + ("" if a > 0 else ", below the horizon")})
+                     "Looks": f"{2 * float(mo['rad'][i]):.3f}° wide", "Notes": f"{float(mo['k'][i]):.0%} lit" + ("" if a > 0 else ", below the horizon"), "Today it": how(name)})
     for name, p in d.planets.items():
         a = float(p["alt"][i])
         rows.append({"Object": name, "Height above the horizon": f"{a:+.1f}°", "Direction": f"{float(p['az'][i]):.0f}° {compass(float(p['az'][i]))}",
-                     "Looks": "a point of light", "Notes": "" if a > 0 else "below the horizon"})
+                     "Looks": "a point of light", "Notes": "" if a > 0 else "below the horizon", "Today it": how(name)})
     return rows
 
 
