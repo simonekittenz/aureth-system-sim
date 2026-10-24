@@ -67,6 +67,13 @@ Play button that runs a time-lapse. The picture sits at the top of the tab, its 
 full-screen button at its top right goes larger still. You choose the start, the time between frames (5 minutes to 10 days), how long it plays
 (an hour to four years) and the speed. The founding moment is the default view.
 
+### Moving around and star-chart mode
+
+Above the Night sky picture, the **West / North / South / East** buttons move your position on Bayurinda by the chosen step (1° to 45°),
+changing the same latitude and longitude as the sidebar sliders. The readout shows where you stand and how far a degree is in km.
+**Stars in daytime too** switches to a star-chart mode: stars, Milky Way and constellation lines stay visible whatever the Sun is doing,
+and the sky background goes dark so they can be seen. Switch it off for the realistic sky.
+
 ### Reading coordinates off the sky
 
 Tick **Pointer coordinates** in the Night sky tab. The sky becomes a still picture of the start moment, and hovering shows the ecliptic

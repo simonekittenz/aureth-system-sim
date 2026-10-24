@@ -72,7 +72,7 @@ for _k, _v in ss.get("_moons_saved", {}).items():
 for _k, _v in {"v_window": 240, "v_step": 3, "v_lat": 10, "v_lon": 0, "v_unit": "Earth days", "v_sky_year": 1, "v_sky_day": 1,
                "v_sky_clock": 0.0, "v_sky_view": "Panorama", "v_sky_fov": 180, "v_sky_height": 860, "v_sky_look": "Liwaya", "v_sky_scale": 12,
                "v_sky_pick": False, "v_sky_pv_on": False, "v_sky_pv_lon": 100.0, "v_sky_pv_lat": 20.0, "v_sky_pv_mag": 1.0,
-               "v_con_show": None, "v_con_labels": True, "v_con_edit": None, "v_con_fig": None,
+               "v_sky_always": False, "v_sky_move": 10, "v_con_show": None, "v_con_labels": True, "v_con_edit": None, "v_con_fig": None,
                "v_sky_named": True, "v_sky_mw": True, "v_sky_faint": True, "v_sky_seed": load_faint_settings()["seed"], "v_sky_step": "30 minutes", "v_sky_span": "1 day", "v_sky_ms": 140}.items():
     if _k not in ss:
         ss[_k] = _v
@@ -665,12 +665,15 @@ with tabs[9]:
     scale = v4.slider("Draw the Sun and moons larger by", 1, 40, key="v_sky_scale", help="1 is true size: the discs are about half a degree across.")
     sky_h = v5.slider("Picture height (pixels)", 450, 1500, step=50, key="v_sky_height",
                       help="Bigger is easier to see. The full-screen button at the top right of the picture goes even larger.")
-    t1, t2, t3, t4, _ = st.columns([1, 1, 1, 1.5, 0.7])
+    t1, t2, t3, t4, t5 = st.columns([1, 1, 1, 1.4, 1.8])
     named_on = t1.checkbox("Named stars", key="v_sky_named", help="The bright stars from the sky section of data/aureth.yaml. Names and positions are placeholders.")
     mw_on = t2.checkbox("Milky Way", key="v_sky_mw", help="Built from the galaxy's pole, centre and width in data/aureth.yaml.")
     faint_on = t3.checkbox("Faint stars", key="v_sky_faint", help="Decorative: crowded along the Milky Way, thin elsewhere.")
     pick_on = t4.checkbox("Pointer coordinates", key="v_sky_pick",
                           help="Hover over the sky to read its coordinates. Shows the start moment as a still picture, because the sky turns while it plays.")
+    always_on = t5.checkbox("Stars in daytime too", key="v_sky_always",
+                            help="Star-chart mode: the stars, Milky Way and constellation lines stay visible whatever the Sun is doing. The sky background goes dark "
+                                 "so they can be seen. Switch it off for the realistic sky, where daylight hides them.")
     preview = None
     if pick_on:
         with st.expander("Preview a star at coordinates you choose", expanded=True):
@@ -858,9 +861,28 @@ with tabs[9]:
     ref = sky if (abs(span_h - 19.0) < 1e-9 and abs(step_h - 0.5) < 1e-9) else get_sky(system, float(lat), float(lon), float(day_total), start_h, 19.0, 0.5)
     compass = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SW": 225, "W": 270, "NW": 315}
     center = float(compass[look]) if look in compass else find_sight(sky, look, 0)
+    def move_by(dlat: int, dlon: int):
+        ss["v_lat"] = int(max(-90, min(90, ss["v_lat"] + dlat)))
+        ss["v_lon"] = int((ss["v_lon"] + dlon + 180) % 360 - 180)
+
+    def move_home():
+        ss["v_lat"], ss["v_lon"] = 10, 0
+
     with sky_box:
+        mv = st.columns([1, 1, 1, 1, 0.9, 2.4, 1.6])
+        stp = int(ss["v_sky_move"])
+        mv[0].button("West", icon=":material/arrow_back:", on_click=move_by, args=(0, -stp), key="mv_w", width="stretch", help="Move west (lower longitude).")
+        mv[1].button("North", icon=":material/arrow_upward:", on_click=move_by, args=(stp, 0), key="mv_n", width="stretch", help="Move north (higher latitude).")
+        mv[2].button("South", icon=":material/arrow_downward:", on_click=move_by, args=(-stp, 0), key="mv_s", width="stretch", help="Move south (lower latitude).")
+        mv[3].button("East", icon=":material/arrow_forward:", on_click=move_by, args=(0, stp), key="mv_e", width="stretch", help="Move east (higher longitude).")
+        mv[4].selectbox("Step", [1, 2, 5, 10, 15, 30, 45], key="v_sky_move", format_func=lambda v: f"{v}°", label_visibility="collapsed",
+                        help="How far each arrow moves you, in degrees.")
+        la_, lo_ = int(ss["v_lat"]), int(ss["v_lon"])
+        mv[5].markdown(f"**Standing at {abs(la_)}°{'N' if la_ >= 0 else 'S'}, {abs(lo_)}°{'E' if lo_ >= 0 else 'W'}**"
+                       f"  \n1° is about {math.pi * planet.radius_km / 180:.0f} km", help="The same position as the latitude and longitude sliders in the sidebar.")
+        mv[6].button("Back to 10°N, 0°E", on_click=move_home, key="mv_home", width="stretch", icon=":material/home:")
         st.plotly_chart(sky_figure(sky, "dome" if view == "All-sky dome" else "panorama", center, float(fov), float(scale), named_on, 0, ref,
-                                   int(frame_ms), mw_on, faint_on, int(ss["v_sky_seed"]), int(sky_h), pick_on, preview, shown_sets, bool(ss["v_con_labels"])),
+                                   int(frame_ms), mw_on, faint_on, int(ss["v_sky_seed"]), int(sky_h), pick_on, preview, shown_sets, bool(ss["v_con_labels"]), bool(always_on)),
                         width="stretch", config={"displaylogo": False, "toImageButtonOptions": {"width": 1920, "height": 1080, "scale": 1}})
         if pick_on:
             st.caption(f"Pointer mode: a still picture of {sky.labels[0]}. Move the pointer over the sky to read its **ecliptic longitude and latitude**, "

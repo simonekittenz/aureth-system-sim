@@ -248,11 +248,11 @@ MW_LAYERS = tuple((f"mw_{k}", sc, col) for k, (sc, col) in enumerate((
     (1.2, "rgba(210,220,255,0.044)"), (0.9, "rgba(235,236,255,0.052)"), (0.6, "rgba(255,244,222,0.065)"))))
 
 
-def _con_traces(cset: dict, stars, U, E, N, proj: Projection, sun_alt: float, labels: bool):
+def _con_traces(cset: dict, stars, U, E, N, proj: Projection, sun_alt: float, labels: bool, always: bool = False):
     """The lines and figure names of one constellation set, as seen at this moment. Lines follow great circles and stop short of each star."""
     view = proj.view
     vec = {st.name: ecl_vec(np.array(st.lon), np.array(st.lat)) for st in stars}
-    fade = round(0.85 * _vis(sun_alt, 1.0), 2)
+    fade = 0.85 if always else round(0.85 * _vis(sun_alt, 1.0), 2)
     xs, ys, lx, ly, lt = [], [], [], [], []
     t = np.linspace(0, 1, 16)[:, None]
     for fg in cset["figures"]:
@@ -289,7 +289,9 @@ def _con_traces(cset: dict, stars, U, E, N, proj: Projection, sun_alt: float, la
 def _frame_traces(d: SkyData, i: int, proj: Projection, scale: float, opts: dict):
     view = proj.view
     sun_alt = float(d.sun["alt"][i])
-    sky = _rgba(sky_rgb(sun_alt), 1.0)
+    always = bool(opts.get("always"))                       # star-chart mode: dark sky, every star visible, day or night
+    sky = _rgba(sky_rgb(-90.0 if always else sun_alt), 1.0)
+    vis_of = (lambda mag: 1.0) if always else (lambda mag: _vis(sun_alt, mag))
     traces = {}
     if view == "dome":
         a = np.linspace(0, 2 * np.pi, 120)
@@ -300,7 +302,7 @@ def _frame_traces(d: SkyData, i: int, proj: Projection, scale: float, opts: dict
     stars, mw = load_sky()
 
     # the galaxy
-    mw_vis = max(0.0, min(1.0, (-sun_alt - 14) / 6)) * mw.brightness if opts["milky_way"] else 0.0
+    mw_vis = (1.0 if always else max(0.0, min(1.0, (-sun_alt - 14) / 6))) * mw.brightness if opts["milky_way"] else 0.0
     if mw_vis > 0:
         cx_, cy_, wv, lv = _band_centre(mw, d, i, proj)
         for key, sc, _ in MW_LAYERS:
@@ -328,13 +330,13 @@ def _frame_traces(d: SkyData, i: int, proj: Projection, scale: float, opts: dict
 
     # constellation lines (several sets can show at once, each in its own colour)
     for k, cset in enumerate(opts.get("cons") or []):
-        traces[f"con{k}"], traces[f"conlab{k}"] = _con_traces(cset, stars, U, E, N, proj, sun_alt, opts.get("con_labels", True))
+        traces[f"con{k}"], traces[f"conlab{k}"] = _con_traces(cset, stars, U, E, N, proj, sun_alt, opts.get("con_labels", True), opts.get("always", False))
 
     # faint stars, crowded along the galaxy
     fv, fm = _faint(opts.get("seed"))
     if opts["faint"]:
         alt_, az_ = _altaz(fv, np.broadcast_to(U, fv.shape), np.broadcast_to(E, fv.shape), np.broadcast_to(N, fv.shape))
-        vis = np.array([_vis(sun_alt, m) for m in fm])
+        vis = np.array([vis_of(m) for m in fm])
         keep = (alt_ > 0) & (vis > 0)
         x, y = proj.xy(alt_[keep], az_[keep])
         traces["faint"] = dict(x=list(x), y=list(y), marker=dict(size=list(np.round(1.2 + (5.6 - fm[keep]) * 0.4, 2)), color="white",
@@ -346,7 +348,7 @@ def _frame_traces(d: SkyData, i: int, proj: Projection, scale: float, opts: dict
     if opts["named"] and stars:
         sv = ecl_vec(np.array([st.lon for st in stars]), np.array([st.lat for st in stars]))
         alt_, az_ = _altaz(sv, np.broadcast_to(U, sv.shape), np.broadcast_to(E, sv.shape), np.broadcast_to(N, sv.shape))
-        vis = np.array([_vis(sun_alt, st.mag) for st in stars])
+        vis = np.array([vis_of(st.mag) for st in stars])
         keep = (alt_ > 0) & (vis > 0)
         x, y = proj.xy(alt_[keep], az_[keep])
         kept = [st for st, k in zip(stars, keep) if k]
@@ -366,7 +368,7 @@ def _frame_traces(d: SkyData, i: int, proj: Projection, scale: float, opts: dict
     for key, mult, alpha in (("sun_g1", 6.0, 0.10), ("sun_g2", 2.5, 0.22)):
         gx, gy = _circle(cx, cy, r * mult)
         x, y = _copies(gx, gy, view)
-        traces[key] = dict(x=x, y=y, fillcolor=f"rgba(255,209,102,{alpha})", opacity=op)
+        traces[key] = dict(x=x, y=y, fillcolor=f"rgba(255,209,102,{alpha * (0.45 if always else 1.0)})", opacity=op)
     gx, gy = _circle(cx, cy, r)
     x, y = _copies(gx, gy, view)
     traces["sun"] = dict(x=x, y=y, fillcolor="rgb(255,222,130)", opacity=op)
@@ -468,10 +470,10 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
                named: bool = True, start_index: int = 0, ref: SkyData | None = None, frame_ms: int = 140,
                milky_way: bool = True, faint: bool = True, faint_seed: int | None = None, height: int = 0,
                pick: bool = False, preview: dict | None = None,
-               cons: list[dict] | None = None, con_labels: bool = True) -> go.Figure:
+               cons: list[dict] | None = None, con_labels: bool = True, always_stars: bool = False) -> go.Figure:
     proj = Projection(view, center_az)
     ref = ref or d
-    opts = {"named": named, "milky_way": milky_way, "faint": faint, "seed": faint_seed, "cons": cons or [], "con_labels": con_labels}
+    opts = {"named": named, "milky_way": milky_way, "faint": faint, "seed": faint_seed, "cons": cons or [], "con_labels": con_labels, "always": always_stars}
     first = _frame_traces(d, start_index, proj, scale, opts)
     n_moons = len(d.moons)
     fig = go.Figure()
