@@ -67,7 +67,7 @@ for _k, _v in ss.get("_moons_saved", {}).items():
         ss[_k] = _v
 for _k, _v in {"v_window": 240, "v_step": 3, "v_lat": 10, "v_lon": 0, "v_unit": "Earth days", "v_sky_year": 1, "v_sky_day": 1,
                "v_sky_clock": 0.0, "v_sky_view": "Panorama", "v_sky_fov": 360, "v_sky_look": "Liwaya", "v_sky_scale": 12,
-               "v_sky_stars": True}.items():
+               "v_sky_stars": True, "v_sky_step": "30 minutes", "v_sky_span": "1 day", "v_sky_ms": 140}.items():
     if _k not in ss:
         ss[_k] = _v
 
@@ -587,11 +587,24 @@ with tabs[9]:
     def jump_founding():
         st.session_state.update({"v_sky_year": 1, "v_sky_day": 1, "v_sky_clock": 0.0})
 
+    year_len = planet.year_solar_days
+    moon_month = float(max(rates["synodic"])) / planet.local_day_days
+    STEPS = {"5 minutes": 5 / 60, "15 minutes": 0.25, "30 minutes": 0.5, "1 hour": 1.0, "3 hours": 3.0, "1 day": 19.0,
+             "3 days": 57.0, "10 days": 190.0}
+    SPANS = {"1 hour": 1.0, "6 hours": 6.0, "1 day": 19.0, "3 days": 57.0, "10 days": 190.0,
+             f"one moon-month ({moon_month:.1f} days)": moon_month * 19, "1 year": year_len * 19, "4 years": 4 * year_len * 19}
+    if ss["v_sky_span"] not in SPANS:                     # the moon-month label changes with the settings
+        ss["v_sky_span"] = "1 day"
+
     k1, k2, k3, k4 = st.columns([1, 1, 2, 1.2])
-    k1.number_input("Year", 1, 5000, step=1, key="v_sky_year")
-    k2.number_input("Day of the year", 1, int(round(planet.year_solar_days)), step=1, key="v_sky_day")
-    k3.slider("Local time (hours after midnight; a day is 19 hours)", 0.0, 18.5, step=0.5, key="v_sky_clock")
+    k1.number_input("Start: year", 1, 5000, step=1, key="v_sky_year")
+    k2.number_input("Day of the year", 1, int(round(year_len)), step=1, key="v_sky_day")
+    k3.slider("Start at local time (hours after midnight; a day is 19 hours)", 0.0, 18.5, step=0.25, key="v_sky_clock")
     k4.button("Jump to the founding moment", on_click=jump_founding)
+    p1, p2, p3 = st.columns(3)
+    step_label = p1.select_slider("Time between frames", list(STEPS), key="v_sky_step")
+    span_label = p2.select_slider("Play for", list(SPANS), key="v_sky_span")
+    frame_ms = p3.slider("Pause between frames (milliseconds)", 20, 1000, step=10, key="v_sky_ms", help="Smaller is faster.")
     v1, v2, v3, v4, v5 = st.columns([1.3, 1.2, 1.3, 1.5, 1])
     view = v1.radio("View", ["Panorama", "All-sky dome"], key="v_sky_view", horizontal=True,
                     help="Panorama: the horizon laid out flat. Dome: looking straight up, north at the top, east on the left.")
@@ -600,33 +613,43 @@ with tabs[9]:
     scale = v4.slider("Draw the Sun and moons larger by", 1, 40, key="v_sky_scale", help="1 is true size: the discs are about half a degree across.")
     stars_on = v5.checkbox("Background stars", key="v_sky_stars", help="Decorative placeholders; your stars are not defined yet.")
 
-    year_len = planet.year_solar_days
+    span_h = SPANS[span_label]
+    step_h = min(STEPS[step_label], span_h)
+    MAX_FRAMES = 300
+    if span_h / step_h + 1 > MAX_FRAMES:
+        step_h = span_h / (MAX_FRAMES - 1)
+        st.info(f"That would be more than {MAX_FRAMES} frames, so the time between frames is widened to "
+                f"{step_h:.1f} hours ({step_h / 19:.2f} days).")
     day_total = (ss["v_sky_year"] - 1) * year_len + (ss["v_sky_day"] - 1)
+    start_h = float(ss["v_sky_clock"])
 
     @st.cache_data(show_spinner="Working out the sky...")
-    def get_sky(system: System, lat_: float, lon_: float, day_: float):
-        return compute_sky(system, lat_, lon_, day_)
+    def get_sky(system: System, lat_: float, lon_: float, day_: float, start_: float, span_: float, step_: float):
+        return compute_sky(system, lat_, lon_, day_, start_, span_, step_)
 
-    sky = get_sky(system, float(lat), float(lon), float(day_total))
-    idx = max(0, min(len(sky.clock) - 1, int(round(ss["v_sky_clock"] / 0.5))))
+    sky = get_sky(system, float(lat), float(lon), float(day_total), start_h, float(span_h), float(step_h))
+    ref = sky if (abs(span_h - 19.0) < 1e-9 and abs(step_h - 0.5) < 1e-9) else get_sky(system, float(lat), float(lon), float(day_total), start_h, 19.0, 0.5)
     compass = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SW": 225, "W": 270, "NW": 315}
-    center = float(compass[look]) if look in compass else find_sight(sky, look, idx)
-    st.plotly_chart(sky_figure(sky, "dome" if view == "All-sky dome" else "panorama", center, float(fov), float(scale), stars_on, idx), width="stretch")
-    st.caption("Drag the slider under the picture or press Play to run through the whole 19-hour day. Faded objects are below the horizon; "
+    center = float(compass[look]) if look in compass else find_sight(sky, look, 0)
+    st.plotly_chart(sky_figure(sky, "dome" if view == "All-sky dome" else "panorama", center, float(fov), float(scale), stars_on, 0, ref, int(frame_ms)),
+                    width="stretch")
+    st.caption(f"{len(sky.clock)} frames from {sky.labels[0]} to {sky.labels[-1]}. Press Play or drag the slider under the picture. "
+               "The table and the dotted paths describe the first moment and the 19 hours after it. Faded objects are below the horizon; "
                "the bright side of each moon faces Aureth. Nineya is close enough that where you stand shifts it against the sky.")
-    st.dataframe(pd.DataFrame(readout(sky, idx)), hide_index=True, width="stretch")
-    cx = {k: v for k, v in day_crossings(sky).items() if v and k in ("Aureth", "Liwaya", "Nineya")}
+    st.dataframe(pd.DataFrame(readout(sky, 0, ref)), hide_index=True, width="stretch")
+    cx = {k: v for k, v in day_crossings(ref).items() if v and k in ("Aureth", "Liwaya", "Nineya")}
     if len({v["rightward"] for v in cx.values()}) > 1:
         def group(r):
             names = [k for k, v in cx.items() if v["rightward"] == r]
-            joined = " and ".join(names)
-            return joined, len(names) == 1
+            return " and ".join(names), len(names) == 1
         east_names, east_one = group(True)
         west_names, west_one = group(False)
         st.info(f"Everything still rises in the east and sets in the west, but {east_names} cross{'es' if east_one else ''} south of the zenith "
                 f"and drift{'s' if east_one else ''} left to right on the panorama, while {west_names} cross{'es' if west_one else ''} north of it "
                 f"and drift{'s' if west_one else ''} right to left. At low latitudes, with a 16° axial tilt, bodies can pass on either side of the zenith. "
-                "The dotted paths and arrows show each one's route today, and the all-sky dome shows them going the same way round.")
+                "The dotted paths and arrows show each one's route, and the all-sky dome shows them going the same way round.")
+    if ss["v_sky_year"] == 1 and ss["v_sky_day"] == 1 and ss["v_sky_clock"] == 0.0:
+        st.caption("The first frame is the founding moment: Liwaya and Nineya full, overlapping, almost overhead, with Ashara and Tarnic in the same line and Aureth directly beneath.")
 
 
 # ------------------------------------------------------------------ Stability

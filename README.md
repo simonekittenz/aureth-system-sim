@@ -62,7 +62,8 @@ and where the double-full and double-new months fall. Gold bands mark the stretc
 
 The sky from a chosen latitude, longitude and local time: Aureth, both moons with their true phases, Ashara and Tarnic, the
 horizon with compass points and a decorative star field (placeholders, not canon). A panorama or an all-sky dome, with a
-slider and a Play button that runs through the 19-hour day. The founding moment is the default view.
+Play button that runs a time-lapse. You choose the start, the time between frames (5 minutes to 10 days), how long it plays
+(an hour to four years) and the speed. The founding moment is the default view.
 
 ## Landmarks tab
 
@@ -111,7 +112,8 @@ and where the double-full and double-new months fall. Gold bands mark the stretc
 
 The sky from a chosen latitude, longitude and local time: Aureth, both moons with their true phases, Ashara and Tarnic, the
 horizon with compass points and a decorative star field (placeholders, not canon). A panorama or an all-sky dome, with a
-slider and a Play button that runs through the 19-hour day. The founding moment is the default view.
+Play button that runs a time-lapse. You choose the start, the time between frames (5 minutes to 10 days), how long it plays
+(an hour to four years) and the speed. The founding moment is the default view.
 
 ## Landmarks tab
 

@@ -75,7 +75,8 @@ def moons_at(system: System, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]
 @dataclass
 class SkyData:
     t: np.ndarray                   # Earth days since the founding moment
-    clock: np.ndarray               # local mean solar time, hours
+    clock: np.ndarray               # local mean solar time of day, hours
+    labels: list                    # "year 3, day 120, 04:30" for each frame
     sun: dict                       # alt, az (deg), rad (deg), probe (alt, az) for nothing
     moons: dict                     # name -> dict(alt, az, rad, k, limb_alt, limb_az, dist_km)
     planets: dict                   # name -> dict(alt, az)
@@ -92,14 +93,24 @@ def _altaz(v, U, E, N):
     return alt, az
 
 
-def compute_sky(system: System, lat: float, lon: float, day_total: float, step_hours: float = 0.5) -> SkyData:
-    """The sky from (lat, lon) through one solar day (19 hours) starting at local mean midnight on `day_total`
-    (days since the founding moment, which is local midnight on day 0 at longitude 0)."""
+def compute_sky(system: System, lat: float, lon: float, day_total: float, start_hour: float = 0.0,
+                span_hours: float = 19.0, step_hours: float = 0.5) -> SkyData:
+    """The sky from (lat, lon) at a run of moments, in local mean solar time (a day is 19 hours).
+
+    `day_total` counts days since the founding moment, which is local midnight on day 0 at longitude 0. The run starts
+    `start_hour` hours into that day and lasts `span_hours`, with one frame every `step_hours`."""
     pl = system.planet
     D = pl.local_day_days
     lat = max(-89.5, min(89.5, lat))
-    clock = np.arange(0, 19.0, step_hours)
-    t = (day_total + clock / 19.0 - lon / 360.0) * D
+    n = int(round(span_hours / step_hours)) + 1
+    hours = start_hour + step_hours * np.arange(n)
+    days = day_total + hours / 19.0
+    t = (days - lon / 360.0) * D
+    year_len = pl.year_solar_days
+    days_r = np.round(days, 7)                              # avoid 0.99999999 showing as the end of the previous day
+    clock = (days_r - np.floor(days_r)) * 19.0
+    labels = [f"year {int(np.floor(dd / year_len)) + 1}, day {int(np.floor(dd % year_len)) + 1}, "
+              f"{int(c):02d}:{int(round((c % 1) * 60)) % 60:02d}" for dd, c in zip(days_r, clock)]
     mp, sp = moons_at(system, t)
     s = spin_axis(pl)
     U = surface_normal(pl, lat, lon, t)
@@ -144,7 +155,7 @@ def compute_sky(system: System, lat: float, lon: float, day_total: float, step_h
         a_ = np.degrees(np.arcsin(np.clip(sv @ U[i], -1, 1)))
         z_ = np.degrees(np.arctan2(sv @ E[i], sv @ N[i])) % 360
         st_alt[i], st_az[i] = a_, z_
-    return SkyData(t, clock, sun, moons, planets, st_alt, st_az, ssize, lat, lon)
+    return SkyData(t, clock, labels, sun, moons, planets, st_alt, st_az, ssize, lat, lon)
 
 
 # ------------------------------------------------------------------ drawing
@@ -162,7 +173,7 @@ class Projection:
         return rel, alt
 
 
-def _circle(cx, cy, r, n=36):
+def _circle(cx, cy, r, n=28):
     a = np.linspace(0, 2 * np.pi, n)
     return cx + r * np.cos(a), cy + r * np.sin(a)
 
@@ -239,12 +250,17 @@ def _frame_traces(d: SkyData, i: int, proj: Projection, scale: float, show_stars
         x, y = proj.xy(p["alt"][i], p["az"][i])
         px_.append(float(x)); py_.append(float(y)); tx.append(name); ops.append(1.0 if p["alt"][i] > 0 else 0.35)
     traces[base] = dict(x=px_, y=py_, text=tx, marker=dict(size=9, color=[COLORS.get(n, "#ccc") for n in tx], opacity=ops))
+    for tr in traces.values():
+        for key in ("x", "y"):
+            if key in tr:
+                tr[key] = [None if v is None else round(float(v), 2) for v in tr[key]]
     return traces
 
 
 def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov: float = 360.0, scale: float = 10.0,
-               show_stars: bool = True, start_index: int = 0) -> go.Figure:
+               show_stars: bool = True, start_index: int = 0, ref: SkyData | None = None, frame_ms: int = 140) -> go.Figure:
     proj = Projection(view, center_az)
+    ref = ref or d
     fig = go.Figure()
     first = _frame_traces(d, start_index, proj, scale, show_stars)
     n_moons = len(d.moons)
@@ -282,8 +298,8 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
         fig.add_trace(go.Scatter(x=[l[0] for l in lab], y=[-4] * len(lab), mode="text", text=[l[1] for l in lab],
                                  textfont=dict(color="#ced4da", size=14), hoverinfo="skip", showlegend=False))
     # each body's path across the day, with an arrow showing which way it goes
-    tracks = [("Aureth", d.sun["alt"], d.sun["az"], "255,209,102")] + [
-        (n, m["alt"], m["az"], ",".join(str(v) for v in MOON_TINT[n])) for n, m in d.moons.items()]
+    tracks = [("Aureth", ref.sun["alt"], ref.sun["az"], "255,209,102")] + [
+        (n, m["alt"], m["az"], ",".join(str(v) for v in MOON_TINT[n])) for n, m in ref.moons.items()]
     for name, alt, az, rgb in tracks:
         X, Y = proj.xy(alt, az)
         px, py, run = [], [], []
@@ -343,7 +359,7 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
             v = tr[k]
             kw = {kk: vv for kk, vv in v.items()}
             data.append(go.Scatter(**kw))
-        frames.append(go.Frame(data=data, traces=list(fig_idx.values()), name=f"{int(d.clock[i]):02d}:{int(round((d.clock[i] % 1) * 60)):02d}"))
+        frames.append(go.Frame(data=data, traces=list(fig_idx.values()), name=str(i)))
     fig.frames = frames
 
     if view == "dome":
@@ -357,13 +373,15 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
     fig.update_xaxes(range=xr, showgrid=False, zeroline=False, visible=(view != "dome"), scaleanchor="y", constrain="domain",
                      tickvals=ticks["tickvals"], ticktext=[f"{int((center_az + v) % 360)}°" for v in ticks["tickvals"]])
     fig.update_yaxes(range=yr, showgrid=False, zeroline=False, visible=(view != "dome"), constrain="domain", title_text="height above the horizon (°)")
-    steps = [dict(label=f.name, method="animate", args=[[f.name], dict(mode="immediate", frame=dict(duration=0, redraw=True))]) for f in frames]
+    every = max(1, int(math.ceil(len(frames) / 10)))
+    steps = [dict(label=(d.labels[i] if i % every == 0 else ""), method="animate",
+                  args=[[f.name], dict(mode="immediate", frame=dict(duration=0, redraw=True))]) for i, f in enumerate(frames)]
     fig.update_layout(
         height=h, margin=dict(l=10, r=10, t=10, b=10), plot_bgcolor="rgb(10,12,20)", paper_bgcolor="rgba(0,0,0,0)",
         updatemenus=[dict(type="buttons", direction="left", x=0.0, y=-0.12, buttons=[
-            dict(label="Play the day", method="animate", args=[None, dict(frame=dict(duration=140, redraw=True), fromcurrent=True)]),
+            dict(label="Play", method="animate", args=[None, dict(frame=dict(duration=int(frame_ms), redraw=True), fromcurrent=True)]),
             dict(label="Pause", method="animate", args=[[None], dict(frame=dict(duration=0, redraw=False), mode="immediate")])])],
-        sliders=[dict(active=start_index, currentvalue=dict(prefix="Local time "), pad=dict(t=30), steps=steps)])
+        sliders=[dict(active=start_index, currentvalue=dict(prefix="", font=dict(size=14)), pad=dict(t=30), steps=steps)])
     return fig
 
 
@@ -397,10 +415,10 @@ def day_crossings(d: SkyData) -> dict:
     return out
 
 
-def readout(d: SkyData, i: int) -> list[dict]:
+def readout(d: SkyData, i: int, ref: SkyData | None = None) -> list[dict]:
     def compass(az):
         return COMPASS[int(((az + 22.5) % 360) // 45)]
-    cross = day_crossings(d)
+    cross = day_crossings(ref or d)
     def how(name):
         c = cross.get(name)
         if c is None:
