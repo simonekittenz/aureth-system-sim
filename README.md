@@ -67,6 +67,13 @@ Play button that runs a time-lapse. The picture sits at the top of the tab, its 
 full-screen button at its top right goes larger still. You choose the start, the time between frames (5 minutes to 10 days), how long it plays
 (an hour to four years) and the speed. The founding moment is the default view.
 
+### Reading coordinates off the sky
+
+Tick **Pointer coordinates** in the Night sky tab. The sky becomes a still picture of the start moment, and hovering shows the ecliptic
+longitude and latitude under the pointer (the same numbers the `sky` section uses), plus the height, direction and declination, and the
+nearest named star. A **Preview a star** box lets you type coordinates and see where a star would sit, and gives the line to paste into the
+data file. Narrow the panorama width for finer pointing.
+
 ### Editing the sky
 
 In `data/aureth.yaml`, under `sky`:

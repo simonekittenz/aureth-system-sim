@@ -72,6 +72,7 @@ class SkyData:
     sun: dict                       # alt, az (deg), rad (deg), probe (alt, az) for nothing
     moons: dict                     # name -> dict(alt, az, rad, k, limb_alt, limb_az, dist_km)
     planets: dict                   # name -> dict(alt, az)
+    spin: np.ndarray                # the planet's spin axis (inertial unit vector)
     U: np.ndarray                   # local frame at each frame: up, east, north (inertial unit vectors)
     E: np.ndarray
     N: np.ndarray
@@ -140,7 +141,7 @@ def compute_sky(system: System, lat: float, lon: float, day_total: float, start_
         a_, z_ = _altaz(v, U, E, N)
         planets[b.name] = {"alt": a_, "az": z_}
 
-    return SkyData(t, clock, labels, sun, moons, planets, U, E, N, lat, lon)
+    return SkyData(t, clock, labels, sun, moons, planets, s, U, E, N, lat, lon)
 
 
 # ------------------------------------------------------------------ drawing
@@ -370,9 +371,61 @@ def _faint(seed: int | None):
     return _FAINT_CACHE[key]
 
 
+def _panorama_yrange(fov: float) -> list[float]:
+    return [-12, min(92, 10 + 0.62 * fov)] if fov < 360 else [-12, 90]
+
+
+def _pick_grid(d: SkyData, i: int, proj: Projection, fov: float):
+    """A fine grid over the picture whose hover text gives the sky coordinates under the pointer at frame i."""
+    stars, _mw = load_sky()
+    if proj.view == "dome":
+        step = 1.5
+        xs = np.arange(-108, 108.001, step)
+        ys = np.arange(-108, 108.001, step)
+        X, Y = np.meshgrid(xs, ys)
+        r = np.hypot(X, Y)
+        alt = 90.0 - r
+        az = np.degrees(np.arctan2(-X, Y)) % 360
+        outside = r > 108
+    else:
+        half = fov / 2
+        step = max(0.5, fov / 170)
+        y0, y1 = _panorama_yrange(fov)
+        xs = np.arange(-half, half + 1e-9, step)
+        ys = np.arange(y0, y1 + 1e-9, step)
+        X, Y = np.meshgrid(xs, ys)
+        alt = Y
+        az = (proj.c + X) % 360
+        outside = np.zeros_like(alt, dtype=bool)
+    U, E, N = d.U[i], d.E[i], d.N[i]
+    sa, ca = np.sin(np.radians(alt))[..., None], np.cos(np.radians(alt))[..., None]
+    v = sa * U + ca * (np.sin(np.radians(az))[..., None] * E + np.cos(np.radians(az))[..., None] * N)
+    lon = np.degrees(np.arctan2(v[..., 1], v[..., 0])) % 360
+    lat = np.degrees(np.arcsin(np.clip(v[..., 2], -1, 1)))
+    s_ax = d.spin
+    dec = np.degrees(np.arcsin(np.clip(v @ s_ax, -1, 1)))
+    near_txt = np.full(alt.shape, "", dtype=object)
+    if stars:
+        sv = ecl_vec(np.array([st.lon for st in stars]), np.array([st.lat for st in stars]))
+        sep = np.degrees(np.arccos(np.clip(v @ sv.T, -1, 1)))
+        j = sep.argmin(axis=-1)
+        sm = np.take_along_axis(sep, j[..., None], axis=-1)[..., 0]
+        for q in np.flatnonzero((sm < 2.5).ravel()):
+            near_txt.ravel()[q] = f"<br>near {stars[int(j.ravel()[q])].name} ({sm.ravel()[q]:.1f}° away)"
+    comp = np.array(COMPASS, dtype=object)[((az + 22.5) % 360 // 45).astype(int)]
+    text = np.empty(alt.shape, dtype=object)
+    flat = text.ravel()
+    for q, (lo, la, al, az_, de, c, nt, out) in enumerate(zip(lon.ravel(), lat.ravel(), alt.ravel(), az.ravel(), dec.ravel(),
+                                                               comp.ravel(), np.asarray(near_txt, dtype=object).ravel(), outside.ravel())):
+        flat[q] = "" if out else (f"<b>longitude {lo:.1f}°  latitude {la:+.1f}°</b><br>(ecliptic)"
+                                  f"<br>height {al:+.0f}°  direction {az_:.0f}° {c}<br>declination {de:+.1f}°{nt}")
+    return xs, ys, text
+
+
 def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov: float = 360.0, scale: float = 10.0,
                named: bool = True, start_index: int = 0, ref: SkyData | None = None, frame_ms: int = 140,
-               milky_way: bool = True, faint: bool = True, faint_seed: int | None = None, height: int = 0) -> go.Figure:
+               milky_way: bool = True, faint: bool = True, faint_seed: int | None = None, height: int = 0,
+               pick: bool = False, preview: dict | None = None) -> go.Figure:
     proj = Projection(view, center_az)
     ref = ref or d
     opts = {"named": named, "milky_way": milky_way, "faint": faint, "seed": faint_seed}
@@ -442,7 +495,7 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
         if len(run) > 1:
             px += list(X[run]) + [None]; py += list(Y[run]) + [None]
         fig.add_trace(go.Scatter(x=px, y=py, mode="lines", line=dict(color=f"rgba({rgb},0.5)", width=2, dash="dot"),
-                                 hovertemplate=f"{name}'s path<extra></extra>", showlegend=False))
+                                 hoverinfo="skip" if pick else None, hovertemplate=None if pick else f"{name}'s path<extra></extra>", showlegend=False))
         best, cur = [], []
         for q in range(len(alt)):
             if alt[q] > 0:
@@ -471,7 +524,7 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
     dyn("planets", mode="markers+text", textposition="top center", textfont=dict(color="#e9ecef", size=11))
 
     frames = []
-    for i in range(len(d.clock)):
+    for i in (range(len(d.clock)) if not pick else []):
         tr = _frame_traces(d, i, proj, scale, opts)
         data = []
         for key, fi in idx.items():
@@ -480,12 +533,26 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
         frames.append(go.Frame(data=data, traces=list(idx.values()), name=str(i)))
     fig.frames = frames
 
+    if pick:
+        gx, gy, gt = _pick_grid(d, start_index, proj, fov)
+        if preview:
+            pv = ecl_vec(np.array(preview["lon"]), np.array(preview["lat"]))[None, :]
+            pa, pz = _altaz(pv, d.U[start_index][None, :], d.E[start_index][None, :], d.N[start_index][None, :])
+            px, py = proj.xy(pa, pz)
+            fig.add_trace(go.Scatter(x=[float(px[0])], y=[float(py[0])], mode="markers+text", text=[preview.get("name", "preview")],
+                                     textposition="bottom right", textfont=dict(color="#ff6fa5", size=13),
+                                     marker=dict(symbol="circle-open", size=max(18, 22 - 3 * preview.get("mag", 1.0)), color="#ff006e", line=dict(width=2)),
+                                     hoverinfo="skip", showlegend=False))
+            fig.add_trace(go.Scatter(x=[float(px[0])], y=[float(py[0])], mode="markers", marker=dict(size=5, color="#ff006e"),
+                                     hoverinfo="skip", showlegend=False))
+        fig.add_trace(go.Heatmap(x=gx, y=gy, z=np.zeros((len(gy), len(gx))), text=gt, hovertemplate="%{text}<extra></extra>",
+                                 colorscale=[[0, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0)"]], showscale=False, hoverongaps=False, zsmooth=False))
     if view == "dome":
         xr, yr, h = [-108, 108], [-108, 108], height or 700
     else:
         half = fov / 2
         xr = [-half, half]
-        yr = [-12, min(92, 10 + 0.62 * fov)] if fov < 360 else [-12, 90]
+        yr = _panorama_yrange(fov)
         h = height or 470
     tv = list(range(-180, 181, 30)) if fov >= 180 else list(range(-180, 181, 15))
     fig.update_xaxes(range=xr, showgrid=False, zeroline=False, visible=(view != "dome"), scaleanchor="y", constrain="domain",
@@ -494,12 +561,17 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
     every = max(1, int(math.ceil(len(frames) / 10)))
     steps = [dict(label=(d.labels[i] if i % every == 0 else ""), method="animate",
                   args=[[f.name], dict(mode="immediate", frame=dict(duration=0, redraw=True))]) for i, f in enumerate(frames)]
-    fig.update_layout(
-        height=h, margin=dict(l=10, r=10, t=44, b=10), plot_bgcolor="rgb(10,12,20)", paper_bgcolor="rgba(0,0,0,0)",
-        updatemenus=[dict(type="buttons", direction="left", x=0.0, y=1.0, yanchor="bottom", buttons=[
+    layout = dict(height=h, margin=dict(l=10, r=10, t=10 if pick else 44, b=10), plot_bgcolor="rgb(10,12,20)", paper_bgcolor="rgba(0,0,0,0)",
+                  hoverlabel=dict(bgcolor="rgba(20,24,40,0.95)", font=dict(size=14, color="#f1f3f5"), bordercolor="#868e96"))
+    if not pick:
+        layout.update(updatemenus=[dict(type="buttons", direction="left", x=0.0, y=1.0, yanchor="bottom", buttons=[
             dict(label="Play", method="animate", args=[None, dict(frame=dict(duration=int(frame_ms), redraw=True), fromcurrent=True)]),
             dict(label="Pause", method="animate", args=[[None], dict(frame=dict(duration=0, redraw=False), mode="immediate")])])],
-        sliders=[dict(active=start_index, currentvalue=dict(prefix="", font=dict(size=14)), pad=dict(t=30), steps=steps)])
+            sliders=[dict(active=start_index, currentvalue=dict(prefix="", font=dict(size=14)), pad=dict(t=30), steps=steps)])
+    fig.update_layout(**layout)
+    if pick and view != "dome":
+        fig.update_xaxes(showspikes=True, spikemode="across", spikesnap="cursor", spikecolor="rgba(255,255,255,0.45)", spikethickness=1)
+        fig.update_yaxes(showspikes=True, spikemode="across", spikesnap="cursor", spikecolor="rgba(255,255,255,0.45)", spikethickness=1)
     return fig
 
 

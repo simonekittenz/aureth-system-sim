@@ -70,6 +70,7 @@ for _k, _v in ss.get("_moons_saved", {}).items():
         ss[_k] = _v
 for _k, _v in {"v_window": 240, "v_step": 3, "v_lat": 10, "v_lon": 0, "v_unit": "Earth days", "v_sky_year": 1, "v_sky_day": 1,
                "v_sky_clock": 0.0, "v_sky_view": "Panorama", "v_sky_fov": 180, "v_sky_height": 860, "v_sky_look": "Liwaya", "v_sky_scale": 12,
+               "v_sky_pick": False, "v_sky_pv_on": False, "v_sky_pv_lon": 100.0, "v_sky_pv_lat": 20.0, "v_sky_pv_mag": 1.0,
                "v_sky_named": True, "v_sky_mw": True, "v_sky_faint": True, "v_sky_seed": load_faint_settings()["seed"], "v_sky_step": "30 minutes", "v_sky_span": "1 day", "v_sky_ms": 140}.items():
     if _k not in ss:
         ss[_k] = _v
@@ -662,10 +663,25 @@ with tabs[9]:
     scale = v4.slider("Draw the Sun and moons larger by", 1, 40, key="v_sky_scale", help="1 is true size: the discs are about half a degree across.")
     sky_h = v5.slider("Picture height (pixels)", 450, 1500, step=50, key="v_sky_height",
                       help="Bigger is easier to see. The full-screen button at the top right of the picture goes even larger.")
-    t1, t2, t3, _ = st.columns([1, 1, 1, 2])
+    t1, t2, t3, t4, _ = st.columns([1, 1, 1, 1.5, 0.7])
     named_on = t1.checkbox("Named stars", key="v_sky_named", help="The bright stars from the sky section of data/aureth.yaml. Names and positions are placeholders.")
     mw_on = t2.checkbox("Milky Way", key="v_sky_mw", help="Built from the galaxy's pole, centre and width in data/aureth.yaml.")
     faint_on = t3.checkbox("Faint stars", key="v_sky_faint", help="Decorative: crowded along the Milky Way, thin elsewhere.")
+    pick_on = t4.checkbox("Pointer coordinates", key="v_sky_pick",
+                          help="Hover over the sky to read its coordinates. Shows the start moment as a still picture, because the sky turns while it plays.")
+    preview = None
+    if pick_on:
+        with st.expander("Preview a star at coordinates you choose", expanded=True):
+            st.caption("Read a spot off the picture, type it here, and see where a star would sit before you edit data/aureth.yaml.")
+            pc1, pc2, pc3, pc4 = st.columns(4)
+            pv_on = pc1.checkbox("Show the preview", key="v_sky_pv_on")
+            pv_lon = pc2.number_input("Ecliptic longitude (°)", 0.0, 360.0, step=0.5, key="v_sky_pv_lon")
+            pv_lat = pc3.number_input("Ecliptic latitude (°)", -90.0, 90.0, step=0.5, key="v_sky_pv_lat")
+            pv_mag = pc4.number_input("Brightness (magnitude)", -2.0, 6.0, step=0.1, key="v_sky_pv_mag", help="Smaller is brighter.")
+            st.code(f'- {{name: "New star", lon: {pv_lon:.1f}, lat: {pv_lat:.1f}, mag: {pv_mag:.1f}, color: "#ffffff", label: true}}', language="yaml")
+            st.caption("Paste that line into the `stars` list under `sky` in data/aureth.yaml, then change the name and colour.")
+            if pv_on:
+                preview = {"lon": float(pv_lon), "lat": float(pv_lat), "mag": float(pv_mag), "name": "preview"}
 
     span_h = SPANS[span_label]
     step_h = min(STEPS[step_label], span_h)
@@ -687,10 +703,15 @@ with tabs[9]:
     center = float(compass[look]) if look in compass else find_sight(sky, look, 0)
     with sky_box:
         st.plotly_chart(sky_figure(sky, "dome" if view == "All-sky dome" else "panorama", center, float(fov), float(scale), named_on, 0, ref,
-                                   int(frame_ms), mw_on, faint_on, int(ss["v_sky_seed"]), int(sky_h)),
+                                   int(frame_ms), mw_on, faint_on, int(ss["v_sky_seed"]), int(sky_h), pick_on, preview),
                         width="stretch", config={"displaylogo": False, "toImageButtonOptions": {"width": 1920, "height": 1080, "scale": 1}})
-        st.caption(f"{len(sky.clock)} frames from {sky.labels[0]} to {sky.labels[-1]}. Press Play or drag the slider under the picture. "
-                   "Hover over the picture and use the arrows at its top right to go full screen.")
+        if pick_on:
+            st.caption(f"Pointer mode: a still picture of {sky.labels[0]}. Move the pointer over the sky to read its **ecliptic longitude and latitude**, "
+                       "the same coordinates the stars use in data/aureth.yaml (longitude 180 is where Aureth sits at the founding moment). "
+                       "These are positions on the sky, not on Bayurinda's surface. Narrow the panorama width for finer pointing.")
+        else:
+            st.caption(f"{len(sky.clock)} frames from {sky.labels[0]} to {sky.labels[-1]}. Press Play or drag the slider under the picture. "
+                       "Hover over the picture and use the arrows at its top right to go full screen.")
     st.caption("The table and the dotted paths describe the first moment and the 19 hours after it. Faded objects are below the horizon; "
                "the bright side of each moon faces Aureth. Nineya is close enough that where you stand shifts it against the sky. "
                "The stars and the Milky Way are placeholders you can edit in data/aureth.yaml.")
