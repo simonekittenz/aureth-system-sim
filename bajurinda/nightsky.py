@@ -248,6 +248,44 @@ MW_LAYERS = tuple((f"mw_{k}", sc, col) for k, (sc, col) in enumerate((
     (1.2, "rgba(210,220,255,0.044)"), (0.9, "rgba(235,236,255,0.052)"), (0.6, "rgba(255,244,222,0.065)"))))
 
 
+def _con_traces(cset: dict, stars, U, E, N, proj: Projection, sun_alt: float, labels: bool):
+    """The lines and figure names of one constellation set, as seen at this moment. Lines follow great circles and stop short of each star."""
+    view = proj.view
+    vec = {st.name: ecl_vec(np.array(st.lon), np.array(st.lat)) for st in stars}
+    fade = round(0.85 * _vis(sun_alt, 1.0), 2)
+    xs, ys, lx, ly, lt = [], [], [], [], []
+    t = np.linspace(0, 1, 16)[:, None]
+    for fg in cset["figures"]:
+        members = []
+        for a, b in fg["lines"]:
+            if a not in vec or b not in vec:
+                continue
+            va, vb = vec[a], vec[b]
+            om = math.acos(float(np.clip(va @ vb, -1, 1)))
+            if om < 1e-4 or om > 3.1:
+                continue
+            members += [a, b]
+            trim = min(0.4, math.radians(1.3) / om)
+            tt = trim + t * (1 - 2 * trim)
+            pts = (np.sin((1 - tt) * om) * va + np.sin(tt * om) * vb) / math.sin(om)
+            alt_, az_ = _altaz(pts, np.broadcast_to(U, pts.shape), np.broadcast_to(E, pts.shape), np.broadcast_to(N, pts.shape))
+            up = alt_ > 0
+            if up.sum() < 2:
+                continue
+            px, py = _poly(*proj.xy(alt_[up], az_[up]), view)
+            xs += px + [None]; ys += py + [None]
+        if labels and members:
+            c = sum(vec[m] for m in set(members))
+            nc = np.linalg.norm(c)
+            if nc > 1e-6:
+                c = (c / nc)[None, :]
+                alt_, az_ = _altaz(c, U[None, :], E[None, :], N[None, :])
+                if alt_[0] > 0:
+                    x, y = proj.xy(alt_, az_)
+                    lx.append(float(np.ravel(x)[0])); ly.append(float(np.ravel(y)[0])); lt.append(fg["name"])
+    return dict(x=xs, y=ys, opacity=fade), dict(x=lx, y=ly, text=lt, opacity=fade)
+
+
 def _frame_traces(d: SkyData, i: int, proj: Projection, scale: float, opts: dict):
     view = proj.view
     sun_alt = float(d.sun["alt"][i])
@@ -287,6 +325,10 @@ def _frame_traces(d: SkyData, i: int, proj: Projection, scale: float, opts: dict
             traces[key] = dict(x=[], y=[], opacity=0)
         for key in ("mw_rift", "mw_pb", "mw_pd"):
             traces[key] = dict(x=[], y=[], opacity=0)
+
+    # constellation lines (several sets can show at once, each in its own colour)
+    for k, cset in enumerate(opts.get("cons") or []):
+        traces[f"con{k}"], traces[f"conlab{k}"] = _con_traces(cset, stars, U, E, N, proj, sun_alt, opts.get("con_labels", True))
 
     # faint stars, crowded along the galaxy
     fv, fm = _faint(opts.get("seed"))
@@ -425,10 +467,11 @@ def _pick_grid(d: SkyData, i: int, proj: Projection, fov: float):
 def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov: float = 360.0, scale: float = 10.0,
                named: bool = True, start_index: int = 0, ref: SkyData | None = None, frame_ms: int = 140,
                milky_way: bool = True, faint: bool = True, faint_seed: int | None = None, height: int = 0,
-               pick: bool = False, preview: dict | None = None) -> go.Figure:
+               pick: bool = False, preview: dict | None = None,
+               cons: list[dict] | None = None, con_labels: bool = True) -> go.Figure:
     proj = Projection(view, center_az)
     ref = ref or d
-    opts = {"named": named, "milky_way": milky_way, "faint": faint, "seed": faint_seed}
+    opts = {"named": named, "milky_way": milky_way, "faint": faint, "seed": faint_seed, "cons": cons or [], "con_labels": con_labels}
     first = _frame_traces(d, start_index, proj, scale, opts)
     n_moons = len(d.moons)
     fig = go.Figure()
@@ -449,6 +492,9 @@ def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov
     dyn("mw_rift", **{**filled, "fillcolor": "rgba(5,8,18,0.8)"})
     dyn("mw_pb", **{**filled, "fillcolor": "rgba(255,238,215,0.035)"})
     dyn("mw_pd", **{**filled, "fillcolor": "rgba(4,6,16,0.45)"})
+    for k, cset in enumerate(cons or []):
+        dyn(f"con{k}", mode="lines", line=dict(color=cset["color"], width=1.8))
+        dyn(f"conlab{k}", mode="text", textposition="bottom center" if k % 2 == 0 else "top center", textfont=dict(color=cset["color"], size=13))
     dyn("faint", mode="markers")
     dyn("named", mode="markers+text", textposition="top right", textfont=dict(color="#ced4da", size=11))
 

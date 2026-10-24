@@ -74,6 +74,16 @@ longitude and latitude under the pointer (the same numbers the `sky` section use
 nearest named star. A **Preview a star** box lets you type coordinates and see where a star would sit, and gives the line to paste into the
 data file. Narrow the panorama width for finer pointing.
 
+### Constellation sets
+
+The Night sky tab has a **Constellation sets** box for joining the named stars into pictures. A *set* is one way of joining the stars
+(one culture's pictures, say), a set holds *figures*, and a figure is a few lines, each joining two stars by name. Any number of sets can
+sit on the same stars, and you can show several at once in different colours. You can create, duplicate (to rework the same figures into
+another reading), rename and delete sets and figures, join stars with a chain, and remove lines. Edits show in the picture at once;
+**Save** writes `data/constellations.yaml` (the file can also be edited by hand). Sets refer to stars by name, so if you rename a star in
+`data/aureth.yaml`, rename it in the sets too (the app warns about lines whose stars no longer exist). The prefilled stars and
+figures are placeholders.
+
 ### Editing the sky
 
 In `data/aureth.yaml`, under `sky`:

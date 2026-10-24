@@ -19,6 +19,7 @@ from bajurinda.landmarks import (
 )
 from bajurinda.nightsky import compute_sky, day_crossings, find_sight, readout, sky_figure
 from bajurinda.starfield import load_faint_settings, load_sky, save_faint_seed
+from bajurinda.constellations import (clone, figure_stars, load_constellations, missing_stars, new_set, save_constellations)
 from bajurinda.eras import era_bands, era_summary, eras_data
 from bajurinda.lunar_calendar import build_calendar
 from bajurinda.dynamics import integrate, mean_rates, phase_ensemble, stability_run
@@ -71,6 +72,7 @@ for _k, _v in ss.get("_moons_saved", {}).items():
 for _k, _v in {"v_window": 240, "v_step": 3, "v_lat": 10, "v_lon": 0, "v_unit": "Earth days", "v_sky_year": 1, "v_sky_day": 1,
                "v_sky_clock": 0.0, "v_sky_view": "Panorama", "v_sky_fov": 180, "v_sky_height": 860, "v_sky_look": "Liwaya", "v_sky_scale": 12,
                "v_sky_pick": False, "v_sky_pv_on": False, "v_sky_pv_lon": 100.0, "v_sky_pv_lat": 20.0, "v_sky_pv_mag": 1.0,
+               "v_con_show": None, "v_con_labels": True, "v_con_edit": None, "v_con_fig": None,
                "v_sky_named": True, "v_sky_mw": True, "v_sky_faint": True, "v_sky_seed": load_faint_settings()["seed"], "v_sky_step": "30 minutes", "v_sky_span": "1 day", "v_sky_ms": 140}.items():
     if _k not in ss:
         ss[_k] = _v
@@ -683,6 +685,161 @@ with tabs[9]:
             if pv_on:
                 preview = {"lon": float(pv_lon), "lat": float(pv_lat), "mag": float(pv_mag), "name": "preview"}
 
+    # ---- constellation sets: the working copy lives in the session; the Save button writes it to data/constellations.yaml
+    if "_con_work" not in ss:
+        ss["_con_work"] = clone(load_constellations())
+        ss["_con_disk"] = clone(ss["_con_work"])
+    work = ss["_con_work"]
+    star_list = list(load_sky()[0])
+    star_names = [s_.name for s_ in sorted(star_list, key=lambda s_: (s_.mag, s_.name))]
+    known = set(star_names)
+    set_names = [s_["name"] for s_ in work]
+    if ss.get("v_con_show") is None or any(n_ not in set_names for n_ in ss["v_con_show"]):
+        ss["v_con_show"] = [n_ for n_ in (ss.get("v_con_show") or set_names[:1]) if n_ in set_names]
+    if ss.get("v_con_edit") not in set_names:
+        ss["v_con_edit"] = set_names[0] if set_names else None
+
+    with st.expander("Constellation sets: join the same stars in different ways", expanded=False):
+        st.caption("A **set** is one way of joining the stars (one culture's pictures, say). A set holds **figures**, and a figure is a handful of lines, each joining two "
+                   "named stars. Sets are independent, so as many as you like can sit on the same stars, and you can show several at once in different colours. "
+                   "Everything prefilled is a placeholder. Changes show in the picture straight away; **Save** writes them to data/constellations.yaml.")
+        def sel_set():
+            return next(s_ for s_ in work if s_["name"] == ss["v_con_edit"])
+
+        def do_new():
+            nm = (ss.get("_con_newname") or "").strip() or f"New set {len(work) + 1}"
+            if nm in set_names:
+                ss["_con_msg"] = f"A set called '{nm}' already exists."
+                return
+            work.append(new_set(nm, ["#8ecae6", "#f4a261", "#b8e986", "#d4a5ff", "#ff8fab", "#ffe066"][len(work) % 6]))
+            ss["v_con_edit"] = nm; ss["v_con_show"] = ss["v_con_show"] + [nm]; ss["_con_newname"] = ""
+
+        def do_dup():
+            c0 = sel_set(); nm = f"{c0['name']} (copy)"
+            while nm in set_names:
+                nm += " (copy)"
+            c1 = clone([c0])[0]; c1["name"] = nm
+            work.append(c1); ss["v_con_edit"] = nm; ss["v_con_show"] = ss["v_con_show"] + [nm]
+
+        def do_del():
+            nm = ss["v_con_edit"]
+            work[:] = [s_ for s_ in work if s_["name"] != nm]
+            ss["v_con_show"] = [x for x in ss["v_con_show"] if x != nm]
+            ss["v_con_edit"] = work[0]["name"] if work else None; ss["v_con_fig"] = None
+
+        cA, cB = st.columns([3, 1])
+        cA.multiselect("Show these sets", set_names, key="v_con_show", help="Each shown set is drawn in its own colour. The picture above updates as you change this.")
+        cB.checkbox("Figure names", key="v_con_labels")
+        if set_names:
+            e1, e2, e3 = st.columns([2.2, 1, 1])
+            e1.selectbox("Edit this set", set_names, key="v_con_edit")
+            cur = sel_set()
+            if ss["v_con_edit"] not in ss["v_con_show"]:
+                e1.caption("This set isn't shown. Add it to 'Show these sets' to see your edits.")
+
+            e2.button("Duplicate set", on_click=do_dup, key="con_dup", help="Copies this set, so you can rework the same figures into another reading.")
+            e3.button("Delete set", on_click=do_del, key="con_del")
+        n1, n2 = st.columns([3, 1])
+        n1.text_input("Name for a new set", key="_con_newname", placeholder="e.g. The Salt Road reading")
+        n2.button("Create new set", on_click=do_new, key="con_new")
+        if ss.get("_con_msg"):
+            st.warning(ss.pop("_con_msg"))
+
+        if set_names and ss.get("v_con_edit") in set_names:
+            cur = sel_set()
+            st.markdown("---")
+            g1, g2 = st.columns([3, 1])
+
+            def set_name_cb():
+                new_ = (ss["_con_setname"] or "").strip()
+                if new_ and new_ not in [s_["name"] for s_ in work if s_ is not cur]:
+                    was = cur["name"]; cur["name"] = new_
+                    ss["v_con_show"] = [new_ if x == was else x for x in ss["v_con_show"]]; ss["v_con_edit"] = new_
+
+            ss["_con_setname"] = cur["name"]
+            g1.text_input("Set name", key="_con_setname", on_change=set_name_cb)
+            cur["color"] = g2.color_picker("Line colour", cur["color"], key=f"_con_col_{id(cur)}")
+            cur["note"] = st.text_input("Note (who tells these, what they mean...)", cur["note"], key=f"_con_note_{id(cur)}")
+            bad = missing_stars(cur, known)
+            if bad:
+                st.warning("These stars are used in this set but no longer exist in the star list, so their lines are skipped: " + ", ".join(bad)
+                           + ". Rename them back in data/aureth.yaml, or remove those lines below.")
+
+            fig_names = [f_["name"] for f_ in cur["figures"]]
+            if ss.get("v_con_fig") not in fig_names:
+                ss["v_con_fig"] = fig_names[0] if fig_names else None
+            f1, f2, f3 = st.columns([2.2, 2, 1])
+            f1.selectbox("Figure to edit", fig_names or ["(no figures yet)"], key="v_con_fig", disabled=not fig_names)
+
+            def add_fig():
+                nm = (ss.get("_con_newfig") or "").strip() or f"Figure {len(cur['figures']) + 1}"
+                if nm in [f_["name"] for f_ in cur["figures"]]:
+                    ss["_con_msg"] = f"This set already has a figure called '{nm}'."
+                    return
+                cur["figures"].append({"name": nm, "lines": []}); ss["v_con_fig"] = nm; ss["_con_newfig"] = ""
+
+            f2.text_input("Name for a new figure", key="_con_newfig", placeholder="e.g. The Heron")
+            f3.button("Add figure", on_click=add_fig, key="con_addfig")
+            if cur["figures"] and ss.get("v_con_fig") in fig_names:
+                fg = next(f_ for f_ in cur["figures"] if f_["name"] == ss["v_con_fig"])
+
+                def rename_fig():
+                    new_ = (ss["_con_figname"] or "").strip()
+                    if new_ and new_ not in [f_["name"] for f_ in cur["figures"] if f_ is not fg]:
+                        fg["name"] = new_; ss["v_con_fig"] = new_
+
+                def del_fig():
+                    cur["figures"][:] = [f_ for f_ in cur["figures"] if f_ is not fg]; ss["v_con_fig"] = None
+
+                r1, r2 = st.columns([3, 1])
+                ss["_con_figname"] = fg["name"]
+                r1.text_input("Figure name", key="_con_figname", on_change=rename_fig)
+                r2.button("Delete this figure", on_click=del_fig, key="con_delfig")
+
+                st.markdown("**Join stars with a chain.** Pick stars in the order you want them joined: the first to the second, the second to the third, and so on.")
+                chain = st.multiselect("Stars in order", star_names, key="_con_chain", help="Brightest stars are listed first. Type to search.")
+
+                def add_chain():
+                    ch = ss["_con_chain"]
+                    for a_, b_ in zip(ch, ch[1:]):
+                        if a_ != b_ and [a_, b_] not in fg["lines"] and [b_, a_] not in fg["lines"]:
+                            fg["lines"].append([a_, b_])
+                    ss["_con_chain"] = []
+
+                st.button("Add chain to this figure", on_click=add_chain, key="con_addchain", disabled=len(chain) < 2)
+                lines_txt = [f"{a_}  -  {b_}" for a_, b_ in fg["lines"]]
+                st.multiselect(f"Lines in '{fg['name']}' ({len(lines_txt)})", lines_txt, key="_con_rm",
+                               placeholder="Pick lines here to remove them" if lines_txt else "No lines yet",
+                               help="Select the lines you want to take out, then press 'Remove selected lines'.")
+
+                def rm_lines():
+                    gone = set(ss["_con_rm"])
+                    fg["lines"][:] = [ln for ln in fg["lines"] if f"{ln[0]}  -  {ln[1]}" not in gone]; ss["_con_rm"] = []
+
+                st.button("Remove selected lines", on_click=rm_lines, key="con_rm", disabled=not ss.get("_con_rm"))
+            elif not cur["figures"]:
+                st.caption("This set has no figures yet. Name one above and press Add figure.")
+
+        dirty = work != ss["_con_disk"]
+
+        def save_cons():
+            save_constellations(work); ss["_con_disk"] = clone(work)
+
+        def revert_cons():
+            work[:] = clone(ss["_con_disk"]); ss["v_con_edit"] = None; ss["v_con_fig"] = None
+
+        s1, s2, s3 = st.columns([1, 1, 2.2])
+        s1.button("Save to data/constellations.yaml", on_click=save_cons, key="con_save", type="primary" if dirty else "secondary", disabled=not dirty)
+        s2.button("Undo unsaved changes", on_click=revert_cons, key="con_revert", disabled=not dirty)
+        s3.caption("**Unsaved changes.** They show in the picture and survive switching pages, but are lost if you close the app." if dirty
+                   else "Everything is saved. Commit data/constellations.yaml if you want it in the repo.")
+        with st.expander("Which stars can I use?"):
+            st.dataframe(pd.DataFrame([{"star": s_.name, "brightness (mag)": s_.mag, "ecliptic longitude": s_.lon, "ecliptic latitude": s_.lat,
+                                        "used in sets": ", ".join(c_["name"] for c_ in work if s_.name in sum((figure_stars(f_) for f_ in c_["figures"]), []))}
+                                       for s_ in sorted(star_list, key=lambda s_: s_.mag)]), hide_index=True, width="stretch")
+
+    shown_sets = [s_ for s_ in work if s_["name"] in ss["v_con_show"]]
+
     span_h = SPANS[span_label]
     step_h = min(STEPS[step_label], span_h)
     MAX_FRAMES = 240
@@ -703,7 +860,7 @@ with tabs[9]:
     center = float(compass[look]) if look in compass else find_sight(sky, look, 0)
     with sky_box:
         st.plotly_chart(sky_figure(sky, "dome" if view == "All-sky dome" else "panorama", center, float(fov), float(scale), named_on, 0, ref,
-                                   int(frame_ms), mw_on, faint_on, int(ss["v_sky_seed"]), int(sky_h), pick_on, preview),
+                                   int(frame_ms), mw_on, faint_on, int(ss["v_sky_seed"]), int(sky_h), pick_on, preview, shown_sets, bool(ss["v_con_labels"])),
                         width="stretch", config={"displaylogo": False, "toImageButtonOptions": {"width": 1920, "height": 1080, "scale": 1}})
         if pick_on:
             st.caption(f"Pointer mode: a still picture of {sky.labels[0]}. Move the pointer over the sky to read its **ecliptic longitude and latitude**, "

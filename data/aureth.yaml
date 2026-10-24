@@ -82,6 +82,28 @@ sky:
     - {name: "Violet Eye",     lon: 120.0, lat:  62.0, mag:  1.5, color: "#dcc8ff", label: true}
     - {name: "Far Lamp",       lon: 235.0, lat:  30.0, mag:  2.0, color: "#fff0cf", label: true}
     - {name: "Dawnmark",       lon:  20.0, lat:  -1.0, mag:  0.8, color: "#ffe9c4", label: true,  note: "on the Sun's path"}
+    # ---- more bright stars (placeholders, added as a starting point for building constellations; rename, move or delete freely)
+    # Constellation sets refer to stars by NAME (data/constellations.yaml), so if you rename a star there, rename it in the sets too.
+    - {name: "Sable Keel",     lon:  78.0, lat: -24.0, mag:  1.9, color: "#ffe2b8", label: true}
+    - {name: "Pale Oar",       lon: 112.0, lat: -41.0, mag:  2.1, color: "#e8f0ff", label: false}
+    - {name: "Cinder Mast",    lon: 126.0, lat: -25.0, mag:  1.6, color: "#ff9d78", label: true}
+    - {name: "Low Anchor",     lon:  95.0, lat: -52.0, mag:  2.3, color: "#fff1d6", label: false}
+    - {name: "Silver Ladle",   lon: 136.0, lat:  38.0, mag:  1.4, color: "#f2f6ff", label: true}
+    - {name: "Thorn Crown",    lon: 165.0, lat:  44.0, mag:  1.9, color: "#fff4dc", label: true}
+    - {name: "Grey Heron",     lon: 178.0, lat:  28.0, mag:  2.2, color: "#e9edf5", label: false}
+    - {name: "Quiet Bell",     lon: 108.0, lat:  40.0, mag:  2.4, color: "#dfe7ff", label: false}
+    - {name: "Copper Hearth",  lon: 190.0, lat:  -6.0, mag:  1.7, color: "#ffb08a", label: true}
+    - {name: "Rook's Eye",     lon: 218.0, lat:  22.0, mag:  2.0, color: "#ffe8c0", label: true}
+    - {name: "Ash Wheel",      lon: 248.0, lat:  12.0, mag:  1.5, color: "#f5f1ea", label: true}
+    - {name: "Sparrow",        lon: 225.0, lat: -14.0, mag:  2.3, color: "#fff6e6", label: false}
+    - {name: "Long Furrow",    lon: 285.0, lat: -38.0, mag:  1.2, color: "#ffd9a0", label: true}
+    - {name: "Dim Harp",       lon: 255.0, lat: -62.0, mag:  2.2, color: "#fff0d8", label: false}
+    - {name: "Salt Gate",      lon: 300.0, lat: -55.0, mag:  1.8, color: "#d8ecff", label: true}
+    - {name: "Wren",           lon: 296.0, lat:  22.0, mag:  2.1, color: "#f7f3e8", label: false}
+    - {name: "Pilgrim",        lon: 345.0, lat:  30.0, mag:  1.6, color: "#fff6dc", label: true}
+    - {name: "Coal Pearl",     lon:   7.0, lat:  28.0, mag:  2.0, color: "#ffc8a8", label: true}
+    - {name: "Morning Nail",   lon:  40.0, lat:  18.0, mag:  1.8, color: "#fff2d2", label: true}
+    - {name: "Hollow Tooth",   lon:  70.0, lat:  32.0, mag:  2.2, color: "#eaf1ff", label: false}
   faint_stars:                       # the dim background stars are generated, not listed; the same seed always gives the same sky
     seed: 5
     count_along_galaxy: 380

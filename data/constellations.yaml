@@ -1,0 +1,94 @@
+# Constellation sets: different ways of joining the SAME named stars (the stars are in data/aureth.yaml, under sky.stars).
+# A set holds figures; a figure holds lines; each line joins two stars by NAME.
+# Everything here is a placeholder to build on. The Night sky tab can edit this file; its Save button rewrites it
+# (comments other than this header are not kept, so put notes in the `note` fields instead).
+
+sets:
+  - name: "Set A: first reading (placeholder)"
+    color: "#8ecae6"
+    note: "Placeholder figures to build on. Not canon."
+    figures:
+      - name: "The Ladder"
+        lines:
+          - ["Sable Keel", "Blue Beacon"]
+          - ["Blue Beacon", "Cinder Mast"]
+          - ["Blue Beacon", "Pale Oar"]
+          - ["Pale Oar", "Low Anchor"]
+      - name: "The Crook"
+        lines:
+          - ["Quiet Bell", "Violet Eye"]
+          - ["Violet Eye", "Silver Ladle"]
+          - ["Silver Ladle", "White Twin"]
+          - ["White Twin", "Grey Heron"]
+          - ["Grey Heron", "Thorn Crown"]
+          - ["Thorn Crown", "Silver Ladle"]
+      - name: "The Hearth"
+        lines:
+          - ["Copper Hearth", "Red Ember"]
+          - ["Red Ember", "Rook's Eye"]
+          - ["Rook's Eye", "Far Lamp"]
+          - ["Far Lamp", "Ash Wheel"]
+          - ["Ash Wheel", "Red Ember"]
+          - ["Red Ember", "Sparrow"]
+      - name: "The Warden's Road"
+        lines:
+          - ["Dim Harp", "Amber Warden"]
+          - ["Amber Warden", "Long Furrow"]
+          - ["Long Furrow", "Salt Gate"]
+          - ["Salt Gate", "Dim Harp"]
+      - name: "The Lantern Walk"
+        lines:
+          - ["Wren", "Gold Lantern"]
+          - ["Gold Lantern", "Pilgrim"]
+          - ["Pilgrim", "Ice Needle"]
+          - ["Pilgrim", "Coal Pearl"]
+          - ["Coal Pearl", "Dawnmark"]
+          - ["Dawnmark", "Morning Nail"]
+          - ["Morning Nail", "Hollow Tooth"]
+      - name: "The Pole Pin"
+        lines:
+          - ["Coal Pearl", "Still Star"]
+          - ["Still Star", "Green Spark"]
+          - ["Still Star", "Violet Eye"]
+  - name: "Set B: same stars, different pictures (placeholder)"
+    color: "#f4a261"
+    note: "The same stars joined another way, to show that sets are independent."
+    figures:
+      - name: "The Open Hand"
+        lines:
+          - ["Sable Keel", "Low Anchor"]
+          - ["Low Anchor", "Pale Oar"]
+          - ["Pale Oar", "Cinder Mast"]
+          - ["Cinder Mast", "Blue Beacon"]
+          - ["Blue Beacon", "Sable Keel"]
+      - name: "The Long Serpent"
+        lines:
+          - ["Coal Pearl", "Dawnmark"]
+          - ["Dawnmark", "Morning Nail"]
+          - ["Morning Nail", "Hollow Tooth"]
+          - ["Hollow Tooth", "Quiet Bell"]
+          - ["Quiet Bell", "Violet Eye"]
+          - ["Violet Eye", "Silver Ladle"]
+      - name: "The Cup"
+        lines:
+          - ["Silver Ladle", "Thorn Crown"]
+          - ["Thorn Crown", "Grey Heron"]
+          - ["Grey Heron", "White Twin"]
+          - ["White Twin", "Silver Ladle"]
+          - ["White Twin", "White Twin B"]
+      - name: "The Bonfire"
+        lines:
+          - ["Red Ember", "Copper Hearth"]
+          - ["Red Ember", "Sparrow"]
+          - ["Red Ember", "Rook's Eye"]
+          - ["Red Ember", "Ash Wheel"]
+      - name: "The Gate"
+        lines:
+          - ["Salt Gate", "Long Furrow"]
+          - ["Long Furrow", "Amber Warden"]
+          - ["Amber Warden", "Dim Harp"]
+      - name: "The Pilgrims' Rest"
+        lines:
+          - ["Ice Needle", "Pilgrim"]
+          - ["Pilgrim", "Gold Lantern"]
+          - ["Gold Lantern", "Wren"]
