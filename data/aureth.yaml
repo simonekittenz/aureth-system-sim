@@ -31,7 +31,7 @@ long_cycles:
   planet_system_repeat: {years: 75.4, note: "13 Bayurinda-Ashara cycles = 31 Bayurinda-Tarnic = 18 Ashara-Tarnic"}
   great_cycle: {years: 527, note: "7 planet repeats = 10 moon-plane cycles = 37 eclipse cycles, agreeing to 0.15%"}
   axis_precession: {years: 12336, note: "moons do 78% of the pulling; assumes moment of inertia 0.33 (+-15%)"}
-  orbit_eccentricity_cycle: {years: 172000, note: "eccentricity 0.038 to 0.043 only, with the placeholder Ashara"}
+  orbit_eccentricity_cycle: {years: 23700, note: "eccentricity about 0.035 to 0.044, with Ashara at 0.3 Earth masses (was 172,000 years at 0.1)"}
   star_activity_cycle: {status: undecided, note: "not computed; the Sun's is 11 years"}
 
 # Landmark timings (Bayurindan years of 440 solar days, measured; see the Landmarks tab).
@@ -111,7 +111,12 @@ planets:
     distance_au: 1.1
     status: decision           # rank implies it lies between Bayurinda and Tarnic
     eccentricity: 0.03         # PLACEHOLDER: not settled
-    mass_earth: 0.1            # PLACEHOLDER: not settled (a fractured world; only matters for small perturbations)
+    mass_earth: 0.3            # decision: raised from 0.1; with a dense iron-rich core (5.5 g/cc) the compact equivalent has
+                               # radius ~4,270 km, 0.67 g and a 7.5 km/s escape speed, enough to hold a tall breathable atmosphere
+    density_gcc: 5.5           # decision: denser core (also the source of the magnetic field that shields the shared air)
+    diameter_km: 8537          # derived: diameter of the compact equivalent; the fragments are spread wider than this
+    gravity_g: 0.67            # derived, for the compact equivalent
+    atmosphere: breathable, deep and tall (scale height ~14 km); fragments sit at different altitudes   # decision
     derived:
       year_days: 420.9
       sunlight_earth: 0.72     # derived

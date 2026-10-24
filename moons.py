@@ -15,6 +15,7 @@ from bajurinda.cycles import axial_precession, moon_cycles
 from bajurinda.landmarks import (
     moon_declination_envelope, rise_offset_deg, return_cycles, star_alignment_life, sun_markers,
 )
+from bajurinda.nightsky import compute_sky, find_sight, readout, sky_figure
 from bajurinda.eras import era_bands, era_summary, eras_data
 from bajurinda.lunar_calendar import build_calendar
 from bajurinda.dynamics import integrate, mean_rates, phase_ensemble, stability_run
@@ -64,7 +65,9 @@ ss = st.session_state
 for _k, _v in ss.get("_moons_saved", {}).items():
     if _k not in ss:
         ss[_k] = _v
-for _k, _v in {"v_window": 240, "v_step": 3, "v_lat": 10, "v_lon": 0, "v_unit": "Earth days"}.items():
+for _k, _v in {"v_window": 240, "v_step": 3, "v_lat": 10, "v_lon": 0, "v_unit": "Earth days", "v_sky_year": 1, "v_sky_day": 1,
+               "v_sky_clock": 0.0, "v_sky_view": "Panorama", "v_sky_fov": 360, "v_sky_look": "Liwaya", "v_sky_scale": 12,
+               "v_sky_stars": True}.items():
     if _k not in ss:
         ss[_k] = _v
 
@@ -152,7 +155,7 @@ rates = get_rates(system)
 report_system = System(planet, tuple(replace(m, a_km=d) for m, d in zip(system.moons, rates["distance"])))
 report = system_report(report_system)
 
-tabs = st.tabs(["Overview", "Orbits", "Phases & sky", "Tides", "Alignments", "Calendar", "Eras", "Eclipses", "Landmarks", "Stability", "Method & caveats"])
+tabs = st.tabs(["Overview", "Orbits", "Phases & sky", "Tides", "Alignments", "Calendar", "Eras", "Eclipses", "Landmarks", "Night sky", "Stability", "Method & caveats"])
 
 # ------------------------------------------------------------------ Overview
 with tabs[0]:
@@ -574,8 +577,50 @@ with tabs[8]:
     st.caption("Alignments to the Sun's solstices and to Liwaya's standstills do not creep this way, because the moons hold the planet's tilt steady.")
 
 
-# ------------------------------------------------------------------ Stability
+# ------------------------------------------------------------------ Night sky
 with tabs[9]:
+    st.subheader("The sky from Bayurinda")
+    st.write(f"What you would see standing at **latitude {lat}°, longitude {lon}°** (set them in the sidebar), on a flat horizon. "
+             "Time is local mean solar time: midnight at longitude 0 is the founding moment, when the star, Bayurinda, Ashara and Tarnic "
+             "are in a line and both moons are full overhead.")
+
+    def jump_founding():
+        st.session_state.update({"v_sky_year": 1, "v_sky_day": 1, "v_sky_clock": 0.0})
+
+    k1, k2, k3, k4 = st.columns([1, 1, 2, 1.2])
+    k1.number_input("Year", 1, 5000, step=1, key="v_sky_year")
+    k2.number_input("Day of the year", 1, int(round(planet.year_solar_days)), step=1, key="v_sky_day")
+    k3.slider("Local time (hours after midnight; a day is 19 hours)", 0.0, 18.5, step=0.5, key="v_sky_clock")
+    k4.button("Jump to the founding moment", on_click=jump_founding)
+    v1, v2, v3, v4, v5 = st.columns([1.3, 1.2, 1.3, 1.5, 1])
+    view = v1.radio("View", ["Panorama", "All-sky dome"], key="v_sky_view", horizontal=True,
+                    help="Panorama: the horizon laid out flat. Dome: looking straight up, north at the top, east on the left.")
+    fov = v2.select_slider("Panorama width (degrees)", [360, 180, 90, 45], key="v_sky_fov")
+    look = v3.selectbox("Look toward", ["Liwaya", "Nineya", "Aureth", "Ashara", "Tarnic", "N", "NE", "E", "SE", "S", "SW", "W", "NW"], key="v_sky_look")
+    scale = v4.slider("Draw the Sun and moons larger by", 1, 40, key="v_sky_scale", help="1 is true size: the discs are about half a degree across.")
+    stars_on = v5.checkbox("Background stars", key="v_sky_stars", help="Decorative placeholders; your stars are not defined yet.")
+
+    year_len = planet.year_solar_days
+    day_total = (ss["v_sky_year"] - 1) * year_len + (ss["v_sky_day"] - 1)
+
+    @st.cache_data(show_spinner="Working out the sky...")
+    def get_sky(system: System, lat_: float, lon_: float, day_: float):
+        return compute_sky(system, lat_, lon_, day_)
+
+    sky = get_sky(system, float(lat), float(lon), float(day_total))
+    idx = max(0, min(len(sky.clock) - 1, int(round(ss["v_sky_clock"] / 0.5))))
+    compass = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SW": 225, "W": 270, "NW": 315}
+    center = float(compass[look]) if look in compass else find_sight(sky, look, idx)
+    st.plotly_chart(sky_figure(sky, "dome" if view == "All-sky dome" else "panorama", center, float(fov), float(scale), stars_on, idx), width="stretch")
+    st.caption("Drag the slider under the picture or press Play to run through the whole 19-hour day. Faded objects are below the horizon; "
+               "the bright side of each moon faces Aureth. Nineya is close enough that where you stand shifts it against the sky.")
+    st.dataframe(pd.DataFrame(readout(sky, idx)), hide_index=True, width="stretch")
+    if ss["v_sky_year"] == 1 and ss["v_sky_day"] == 1 and ss["v_sky_clock"] == 0.0:
+        st.caption("This is the founding moment: Liwaya and Nineya full, overlapping, almost overhead, with Ashara and Tarnic in the same line and Aureth directly beneath.")
+
+
+# ------------------------------------------------------------------ Stability
+with tabs[10]:
     st.subheader("Orbital stability")
     st.write("N-body integration of star + planet + both moons. A single run is not conclusive: this system "
              "can be stable for some starting phases and not others. Use the phase ensemble before trusting a configuration.")
@@ -620,7 +665,7 @@ with tabs[9]:
             st.caption("Losses at (years): " + ", ".join(f"{y:.0f}" for y in lost))
 
 # ------------------------------------------------------------------ Method
-with tabs[10]:
+with tabs[11]:
     st.markdown("""
 **Status labels** used throughout: *canon* (your established worldbuilding), *derived* (calculated from canon),
 *hypothetical* (a design choice, such as anything about the moons), and *validated* (checked by simulation, within the stated limits).

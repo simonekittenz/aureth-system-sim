@@ -52,7 +52,7 @@ with st.sidebar:
     st.caption("Star: mass 1.0021 solar, luminosity 0.87, radius 0.985 (set on the moons page / data file).")
     st.button("Reset planets", on_click=reset_system, key="sys_reset")
     for b in BODIES0:
-        with st.expander(b.name + ("  (placeholders)" if b.placeholder_note else "")):
+        with st.expander(b.name + ("  (eccentricity unsettled)" if b.placeholder_note else "")):
             st.number_input("Distance (AU)", 0.3, 5.0, step=0.01, format="%.4f", key=f"sys_{b.name}_a")
             st.slider("Eccentricity", 0.0, 0.4, step=0.005, key=f"sys_{b.name}_e")
             st.number_input("Mass (Earth masses)", 0.01, 30.0, step=0.01, key=f"sys_{b.name}_m")
@@ -71,7 +71,7 @@ BY = {b.name: b for b in BODIES}
 st.title("Aureth system")
 st.caption("Time is counted from the founding moment (the double full moon), when the star, Bayurinda, Ashara and Tarnic "
            "start in a line. Dates read 'year, day' in Bayurindan years of 440 solar days. Orbits are flat and coplanar "
-           "(a placeholder), and Ashara's eccentricity and mass are placeholders.")
+           "(a placeholder), and Ashara's eccentricity is a placeholder.")
 
 tabs = st.tabs(["Orbits", "Cycles", "Sky from Bayurinda", "Transfers", "Long cycles", "Stability"])
 
@@ -307,7 +307,7 @@ with tabs[4]:
             dict(name="Liwaya's orbit turns around", years=lw["node_regression_years"], group="moons",
                  what="Its orbital nodes go once round the sky", basis="measured"),
             dict(name="Grand alignments", years=cy["align"], group="planets",
-                 what="All three planets within 12 degrees, seen from Aureth (average gap)", basis="measured; Ashara is a placeholder"),
+                 what="All three planets within 12 degrees, seen from Aureth (average gap)", basis="measured; depends on Ashara's distance"),
             dict(name="Moons' planes line up", years=cy["plane"], group="moons",
                  what="The two moons' orbital planes coincide; overlaps of the moons peak", basis="measured"),
         ]
@@ -315,7 +315,7 @@ with tabs[4]:
             r = cy["rep"]
             rows.append(dict(name="Whole planet system repeats", years=r["years"], group="planets",
                              what=f"{r['ba']} Bayurinda-Ashara cycles = {r['bt']} Bayurinda-Tarnic = {r['at']} Ashara-Tarnic",
-                             basis="exact orbits; Ashara is a placeholder"))
+                             basis="exact orbits; depends on Ashara's distance"))
         if cy["gc"]:
             g = cy["gc"]
             rows.append(dict(name="THE GREAT CYCLE", years=g["years"], group="combined",
@@ -326,8 +326,8 @@ with tabs[4]:
                          what=f"The spin axis points at a new 'pole star'; the moons do {1 - cy['ax']['shares']['Aureth']:.0%} of the pulling",
                          basis="formula; moment of inertia assumed (+-15%)"))
         rows.append(dict(name="Orbit swells and shrinks", years=e_by, group="slow",
-                         what=f"Bayurinda's eccentricity runs {cy['sec']['e_min']:.3f} to {cy['sec']['e_max']:.3f} (small with these placeholders)",
-                         basis="N-body; depends on Ashara's placeholders"))
+                         what=f"Bayurinda's eccentricity runs {cy['sec']['e_min']:.3f} to {cy['sec']['e_max']:.3f} (small: the other planets are light)",
+                         basis="N-body; depends on Ashara's mass and orbit"))
         rows.sort(key=lambda r: r["years"])
         for r in rows:
             r["label"] = f"{r['years']:,.1f}" if r["years"] < 100 else f"{r['years']:,.0f}"

@@ -73,7 +73,7 @@ def load_system(path: Path = DATA_FILE) -> tuple[Star, list[Body]]:
                 mass = p["gravity_g"] * G_EARTH * (radius * 1e3) ** 2 / G / M_EARTH
         note = ""
         if name == "Ashara":
-            note = "eccentricity and mass are placeholders"
+            note = "eccentricity is a placeholder"
         bodies.append(Body(name, a, float(p.get("eccentricity", 0.0)), float(mass), radius, p.get("day_hours"),
                            float(phases.get(name, 0.0)), 0.0, 0.0, inc, note))
     return star, bodies

@@ -58,6 +58,12 @@ runs of double-full and double-new moons marked. Month and week names and struct
 A long-run timeline (70-300 years) of how often the two moons overlap, the angle between their orbital planes,
 and where the double-full and double-new months fall. Gold bands mark the stretches when the planes are aligned.
 
+## Night sky tab
+
+The sky from a chosen latitude, longitude and local time: Aureth, both moons with their true phases, Ashara and Tarnic, the
+horizon with compass points and a decorative star field (placeholders, not canon). A panorama or an all-sky dome, with a
+slider and a Play button that runs through the 19-hour day. The founding moment is the default view.
+
 ## Landmarks tab
 
 Where the Sun and each moon rise on the horizon at a chosen latitude, the moons' standstills (extreme rising points), cycles after
@@ -100,6 +106,12 @@ runs of double-full and double-new moons marked. Month and week names and struct
 
 A long-run timeline (70-300 years) of how often the two moons overlap, the angle between their orbital planes,
 and where the double-full and double-new months fall. Gold bands mark the stretches when the planes are aligned.
+
+## Night sky tab
+
+The sky from a chosen latitude, longitude and local time: Aureth, both moons with their true phases, Ashara and Tarnic, the
+horizon with compass points and a decorative star field (placeholders, not canon). A panorama or an all-sky dome, with a
+slider and a Play button that runs through the 19-hour day. The founding moment is the default view.
 
 ## Landmarks tab
 
