@@ -10,7 +10,7 @@ from .aureth import COLORS, load_system, state
 from .dynamics import build_simulation
 from .model import System, angular_diameter_deg
 from .sky import illuminated_fraction, phase_disc, spin_axis, surface_normal
-from .starfield import band_edges, circle_on_sky, ecl_vec, faint_stars, load_sky
+from .starfield import band_edges, circle_on_sky, ecl_vec, faint_stars, load_faint_settings, load_sky
 
 SKY_STOPS = [(10, (122, 184, 255)), (3, (240, 170, 120)), (0, (224, 140, 100)), (-6, (61, 79, 143)),
              (-12, (29, 39, 80)), (-18, (7, 11, 26))]
@@ -288,7 +288,7 @@ def _frame_traces(d: SkyData, i: int, proj: Projection, scale: float, opts: dict
             traces[key] = dict(x=[], y=[], opacity=0)
 
     # faint stars, crowded along the galaxy
-    fv, fm = _faint()
+    fv, fm = _faint(opts.get("seed"))
     if opts["faint"]:
         alt_, az_ = _altaz(fv, np.broadcast_to(U, fv.shape), np.broadcast_to(E, fv.shape), np.broadcast_to(N, fv.shape))
         vis = np.array([_vis(sun_alt, m) for m in fm])
@@ -361,18 +361,21 @@ def _frame_traces(d: SkyData, i: int, proj: Projection, scale: float, opts: dict
 _FAINT_CACHE: dict = {}
 
 
-def _faint():
-    if "v" not in _FAINT_CACHE:
-        _FAINT_CACHE["v"], _FAINT_CACHE["m"] = faint_stars(load_sky()[1])
-    return _FAINT_CACHE["v"], _FAINT_CACHE["m"]
+def _faint(seed: int | None):
+    st = load_faint_settings()
+    seed = st["seed"] if seed is None else int(seed)
+    key = (seed, st["n_band"], st["n_field"])
+    if key not in _FAINT_CACHE:
+        _FAINT_CACHE[key] = faint_stars(load_sky()[1], st["n_band"], st["n_field"], seed)
+    return _FAINT_CACHE[key]
 
 
 def sky_figure(d: SkyData, view: str = "panorama", center_az: float = 180.0, fov: float = 360.0, scale: float = 10.0,
                named: bool = True, start_index: int = 0, ref: SkyData | None = None, frame_ms: int = 140,
-               milky_way: bool = True, faint: bool = True) -> go.Figure:
+               milky_way: bool = True, faint: bool = True, faint_seed: int | None = None) -> go.Figure:
     proj = Projection(view, center_az)
     ref = ref or d
-    opts = {"named": named, "milky_way": milky_way, "faint": faint}
+    opts = {"named": named, "milky_way": milky_way, "faint": faint, "seed": faint_seed}
     first = _frame_traces(d, start_index, proj, scale, opts)
     n_moons = len(d.moons)
     fig = go.Figure()

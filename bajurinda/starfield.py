@@ -115,3 +115,21 @@ def faint_stars(mw: MilkyWay, n_band: int = 380, n_field: int = 160, seed: int =
     allv = np.vstack([np.array(pts), v])
     mag = rng.uniform(3.2, 5.6, len(allv))
     return allv, mag
+
+
+def load_faint_settings(path: str = str(DATA_FILE)) -> dict:
+    """The seed and counts for the generated faint stars (cached, so call clear_sky_cache after saving)."""
+    d = yaml.safe_load(Path(path).read_text()).get("sky", {}).get("faint_stars", {})
+    return {"seed": int(d.get("seed", 5)), "n_band": int(d.get("count_along_galaxy", 380)),
+            "n_field": int(d.get("count_elsewhere", 160))}
+
+
+def save_faint_seed(seed: int, path: Path = DATA_FILE) -> None:
+    """Write a new seed into the data file, leaving the rest of the file (and its comments) alone."""
+    import re
+    text = path.read_text()
+    new, n = re.subn(r"(faint_stars:[^\n]*\n\s+seed:\s*)\d+", rf"\g<1>{int(seed)}", text, count=1)
+    if n != 1:
+        raise ValueError("could not find sky.faint_stars.seed in the data file")
+    path.write_text(new)
+    load_sky.cache_clear()

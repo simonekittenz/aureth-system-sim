@@ -82,6 +82,10 @@ sky:
     - {name: "Violet Eye",     lon: 120.0, lat:  62.0, mag:  1.5, color: "#dcc8ff", label: true}
     - {name: "Far Lamp",       lon: 235.0, lat:  30.0, mag:  2.0, color: "#fff0cf", label: true}
     - {name: "Dawnmark",       lon:  20.0, lat:  -1.0, mag:  0.8, color: "#ffe9c4", label: true,  note: "on the Sun's path"}
+  faint_stars:                       # the dim background stars are generated, not listed; the same seed always gives the same sky
+    seed: 5
+    count_along_galaxy: 380
+    count_elsewhere: 160
   milky_way:
     pole: {lon: 215.0, lat: 28.0}   # the pole of the galaxy's plane; the band is the great circle 90 degrees from it
     centre_lon: 258.0               # ecliptic longitude toward the galaxy's bright centre (projected onto the plane)

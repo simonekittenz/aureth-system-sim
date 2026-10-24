@@ -72,6 +72,8 @@ In `data/aureth.yaml`, under `sky`:
 
 - `stars`: each has a `name`, `lon` and `lat` (ecliptic coordinates; longitude 180 is where Aureth sits at the founding moment), a `mag`
   (smaller is brighter), a `color` and whether to show its name.
+- `faint_stars`: the `seed` and counts for the generated dim stars. The same seed always gives the same sky. The sidebar has a
+  seed box, a button for a new random seed, one to go back to the saved seed, and one that writes the current seed into this file.
 - `milky_way`: the `pole` of the galaxy's plane, `centre_lon` (where the bright centre lies), `width_deg`, `bulge_width_deg` and
   `bulge_length_deg` (how much it swells toward the centre), a dark `rift` and any number of `patches` (positive glows, negative dark clouds).
 

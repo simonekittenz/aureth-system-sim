@@ -18,7 +18,7 @@ from bajurinda.landmarks import (
     moon_declination_envelope, rise_offset_deg, return_cycles, star_alignment_life, sun_markers,
 )
 from bajurinda.nightsky import compute_sky, day_crossings, find_sight, readout, sky_figure
-from bajurinda.starfield import load_sky
+from bajurinda.starfield import load_faint_settings, load_sky, save_faint_seed
 from bajurinda.eras import era_bands, era_summary, eras_data
 from bajurinda.lunar_calendar import build_calendar
 from bajurinda.dynamics import integrate, mean_rates, phase_ensemble, stability_run
@@ -70,7 +70,7 @@ for _k, _v in ss.get("_moons_saved", {}).items():
         ss[_k] = _v
 for _k, _v in {"v_window": 240, "v_step": 3, "v_lat": 10, "v_lon": 0, "v_unit": "Earth days", "v_sky_year": 1, "v_sky_day": 1,
                "v_sky_clock": 0.0, "v_sky_view": "Panorama", "v_sky_fov": 360, "v_sky_look": "Liwaya", "v_sky_scale": 12,
-               "v_sky_named": True, "v_sky_mw": True, "v_sky_faint": True, "v_sky_step": "30 minutes", "v_sky_span": "1 day", "v_sky_ms": 140}.items():
+               "v_sky_named": True, "v_sky_mw": True, "v_sky_faint": True, "v_sky_seed": load_faint_settings()["seed"], "v_sky_step": "30 minutes", "v_sky_span": "1 day", "v_sky_ms": 140}.items():
     if _k not in ss:
         ss[_k] = _v
 
@@ -114,6 +114,29 @@ with st.sidebar:
     lat = st.slider("Observer latitude (deg)", -90, 90, key="v_lat")
     lon = st.slider("Observer longitude (deg)", -180, 180, key="v_lon")
     unit = st.radio("Time unit for plots", ["Earth days", "Bajurindan days"], horizontal=True, key="v_unit")
+
+    st.subheader("Faint stars")
+    st.caption("The dim background stars are generated from a seed: the same number always gives the same sky.")
+
+    def shuffle_seed():
+        import random
+        st.session_state["v_sky_seed"] = random.randint(0, 99999)
+
+    def saved_seed():
+        st.session_state["v_sky_seed"] = load_faint_settings()["seed"]
+
+    def save_seed():
+        save_faint_seed(int(st.session_state["v_sky_seed"]))
+        st.session_state["_seed_saved"] = int(st.session_state["v_sky_seed"])
+
+    st.number_input("Seed", 0, 999_999, step=1, key="v_sky_seed")
+    cs1, cs2 = st.columns(2)
+    cs1.button("New random seed", on_click=shuffle_seed, key="seed_shuffle")
+    cs2.button("Back to saved", on_click=saved_seed, key="seed_back", help="Return to the seed written in data/aureth.yaml.")
+    st.button("Save this seed as the default", on_click=save_seed, key="seed_save", help="Writes the seed into data/aureth.yaml.")
+    saved_now = load_faint_settings()["seed"]
+    st.caption(f"Saved seed: {saved_now}" + ("  (just saved)" if st.session_state.get("_seed_saved") == saved_now else "")
+               + ("" if int(st.session_state["v_sky_seed"]) == saved_now else "  - the view is using a different one"))
 
 ss["_moons_saved"] = {k: v for k, v in ss.items() if k.startswith(("p_", "L_", "N_", "v_"))}
 
@@ -657,7 +680,7 @@ with tabs[9]:
     ref = sky if (abs(span_h - 19.0) < 1e-9 and abs(step_h - 0.5) < 1e-9) else get_sky(system, float(lat), float(lon), float(day_total), start_h, 19.0, 0.5)
     compass = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SW": 225, "W": 270, "NW": 315}
     center = float(compass[look]) if look in compass else find_sight(sky, look, 0)
-    st.plotly_chart(sky_figure(sky, "dome" if view == "All-sky dome" else "panorama", center, float(fov), float(scale), named_on, 0, ref, int(frame_ms), mw_on, faint_on),
+    st.plotly_chart(sky_figure(sky, "dome" if view == "All-sky dome" else "panorama", center, float(fov), float(scale), named_on, 0, ref, int(frame_ms), mw_on, faint_on, int(ss["v_sky_seed"])),
                     width="stretch")
     st.caption(f"{len(sky.clock)} frames from {sky.labels[0]} to {sky.labels[-1]}. Press Play or drag the slider under the picture. "
                "The table and the dotted paths describe the first moment and the 19 hours after it. Faded objects are below the horizon; "
