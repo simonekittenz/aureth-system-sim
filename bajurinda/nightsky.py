@@ -359,8 +359,8 @@ def _frame_traces(d: SkyData, i: int, proj: Projection, scale: float, opts: dict
     else:
         traces["faint"] = dict(x=[], y=[], marker=dict(size=[], color="white", opacity=[]))
 
-    # the named stars
-    if opts["named"] and stars:
+    # the bright stars: always drawn; `named` only decides whether their names are shown
+    if stars:
         sv = ecl_vec(np.array([st.lon for st in stars]), np.array([st.lat for st in stars]))
         alt_, az_ = _altaz(sv, np.broadcast_to(U, sv.shape), np.broadcast_to(E, sv.shape), np.broadcast_to(N, sv.shape))
         vis = np.array([vis_of(st.mag) for st in stars])
@@ -368,7 +368,7 @@ def _frame_traces(d: SkyData, i: int, proj: Projection, scale: float, opts: dict
         x, y = proj.xy(alt_[keep], az_[keep])
         kept = [st for st, k in zip(stars, keep) if k]
         traces["named"] = dict(x=list(x), y=list(y),
-                               text=[st.name if (st.label and vis[j] > 0.25) else "" for st, j in zip(kept, np.where(keep)[0])],
+                               text=[st.name if (opts["named"] and st.label and vis[j] > 0.25) else "" for st, j in zip(kept, np.where(keep)[0])],
                                marker=dict(size=[round(float(np.clip(7 - 1.7 * st.mag, 3.5, 12)), 1) for st in kept],
                                            color=[st.color for st in kept], opacity=[round(float(vis[j]), 2) for j in np.where(keep)[0]]))
     else:

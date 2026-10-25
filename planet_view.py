@@ -669,7 +669,7 @@ with T["Night sky"]:
     sky_h = v5.slider("Picture height (pixels)", 450, 1500, step=50, key="v_sky_height",
                       help="Bigger is easier to see. The full-screen button at the top right of the picture goes even larger.")
     t1, t2, t3, t4, t5 = st.columns([1, 1, 1, 1.4, 1.8])
-    named_on = t1.checkbox("Named stars", key="v_sky_named", help="The bright stars from the sky section of data/aureth.yaml. Names and positions are placeholders.")
+    named_on = t1.checkbox("Star names", key="v_sky_named", help="Show the names of the bright stars. The stars themselves are always drawn. They come from the sky section of data/aureth.yaml; names and positions are placeholders.")
     mw_on = t2.checkbox("Milky Way", key="v_sky_mw", help="Built from the galaxy's pole, centre and width in data/aureth.yaml.")
     faint_on = t3.checkbox("Faint stars", key="v_sky_faint", help="Decorative: crowded along the Milky Way, thin elsewhere.")
     pick_on = t4.checkbox("Pointer coordinates", key="v_sky_pick",
