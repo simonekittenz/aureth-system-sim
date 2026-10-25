@@ -1,4 +1,4 @@
-"""A polar star chart of the whole sky, one hemisphere at a time, with constellation sets drawn on it.
+"""A polar star chart of the whole sky, one hemisphere at a time, with constellation sets drawn on it as solid lines.
 
 It uses the sky's own coordinates (ecliptic longitude and latitude, the same as data/aureth.yaml), so it does not depend on which planet you
 stand on. The centre of the northern chart is the ecliptic's north pole, the outer ring is the ecliptic itself (latitude 0), and the chart runs
@@ -134,7 +134,7 @@ def star_map_figure(hemi: str, sets: list[dict], mw: MilkyWay, *, faint: tuple[n
                 ox, oy = _runs(x, y, r <= EDGE)
                 xs_ += ox; ys_ += oy
             fig.add_trace(go.Scatter(x=xs_, y=ys_, mode="lines", showlegend=False, hoverinfo="skip",
-                                     line=dict(color=col, width=3.2 if hit else 1.6, dash="dash"), opacity=0.25 if dim else (1.0 if hit else 0.85)))
+                                     line=dict(color=col, width=3.2 if hit else 1.6), opacity=0.25 if dim else (1.0 if hit else 0.85)))
             c = figure_centre(fg, vec)
             if c is None:
                 continue

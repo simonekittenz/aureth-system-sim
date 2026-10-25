@@ -84,7 +84,7 @@ full-screen button at its top right goes larger still. You choose the start, the
 ### Constellation map
 
 The Aureth system page has a **Constellation map** tab: the whole sky as two round charts (northern and southern), with your constellation sets drawn as
-dashed lines, the bright stars, the faint stars and a soft Milky Way. It does not depend on which planet you stand on. The chart uses the sky's own
+lines, the bright stars, the faint stars and a soft Milky Way. It does not depend on which planet you stand on. The chart uses the sky's own
 coordinates (ecliptic longitude around the edge, latitude as the rings). A search box finds a constellation or a bright star: the match is boxed and drawn
 thick, the rest fade, and the chart switches to the side it is on. A table lists the matches with where they sit and their brightest star.
 **Pointer coordinates** (on by default) shows the ecliptic longitude and latitude under the pointer, and the nearest named star, as you hover. A **Preview a

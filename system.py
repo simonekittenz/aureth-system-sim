@@ -233,7 +233,7 @@ with T["Constellation map"]:
         st.markdown("**Constellations in the shown sets**")
     if _rows:
         st.dataframe(pd.DataFrame(_rows), hide_index=True, width="stretch", height=min(380, 38 + 35 * len(_rows)))
-    st.caption("Each dashed line follows the shortest path between two stars on the sky, so it curves on a flat chart. Hover over a star for its name and position. "
+    st.caption("Each line follows the shortest path between two stars on the sky, so it curves on a flat chart. Hover over a star for its name and position. "
                "The stars, their names and the galaxy are placeholders you can edit in data/aureth.yaml.")
     ss["_map_saved"] = {k: v for k, v in ss.items() if k.startswith("m_")}
 
