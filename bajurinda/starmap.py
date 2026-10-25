@@ -146,8 +146,8 @@ def star_map_figure(hemi: str, sets: list[dict], mw: MilkyWay, *, faint: tuple[n
                                 "Brightest star": bright.name if bright else ""})
             x, y, r = project(c, hemi)
             if figure_names and float(r) <= EDGE:
-                ann.append(dict(x=float(x), y=float(y), text=f"<b>{fg['name']}</b>" if hit else fg["name"], showarrow=False, font=dict(size=14 if hit else 12, color="#fff" if not dim else "rgba(255,255,255,0.4)"),
-                                bgcolor="rgba(18,28,60,0.88)" if not dim else "rgba(18,28,60,0.45)", bordercolor=col if hit else "rgba(0,0,0,0)", borderwidth=2 if hit else 0, borderpad=3))
+                ann.append(dict(x=float(x), y=float(y), text=f"<b>{fg['name']}</b>" if hit else fg["name"], showarrow=False,
+                                font=dict(size=16 if hit else 12, color=col if hit else ("rgba(255,255,255,0.35)" if dim else "rgba(255,255,255,0.9)"))))
 
     # the bright stars
     x, y, r = project(np.array([ecl_vec(np.array(s.lon), np.array(s.lat)) for s in stars]), hemi)
