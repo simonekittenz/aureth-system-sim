@@ -179,7 +179,8 @@ with T["Constellation map"]:
     if "m_sets" not in ss:
         ss["m_sets"] = [n for n in ss.get("v_con_show", []) if n in set_names_] or set_names_[:1]
     ss["m_sets"] = [n for n in ss["m_sets"] if n in set_names_]
-    for _k, _v in {"m_hemi": "north", "m_query": "", "m_figs": True, "m_stars": True, "m_faint": True, "m_glow": True}.items():
+    for _k, _v in {"m_hemi": "north", "m_query": "", "m_figs": True, "m_stars": False, "m_faint": True, "m_glow": True, "m_pick": True,
+                     "m_pv_on": False, "m_pv_lon": 100.0, "m_pv_lat": 20.0, "m_pv_mag": 1.0}.items():
         if _k not in ss:
             ss[_k] = _v
 
@@ -193,19 +194,35 @@ with T["Constellation map"]:
                   help="Type part of a name. The matching constellation is drawn thick and boxed, the rest fade, and the chart switches to the side it is on.")
     q2.multiselect("Show these constellation sets", set_names_, key="m_sets",
                    help="The sets come from the Constellation sets box on the Planet view page (unsaved edits show here too).")
-    o1, o2, o3, o4, o5 = st.columns([1.3, 1, 1, 1, 1])
+    o1, o2, o3, o4, o5, o6 = st.columns([1.3, 1, 1, 1, 1, 1.3])
     o1.radio("Chart", ["north", "south"], key="m_hemi", horizontal=True, format_func=lambda h: "Northern" if h == "north" else "Southern")
     o2.checkbox("Constellation names", key="m_figs")
     o3.checkbox("Star names", key="m_stars")
     o4.checkbox("Faint stars", key="m_faint")
     o5.checkbox("Milky Way", key="m_glow")
+    o6.checkbox("Pointer coordinates", key="m_pick",
+                help="Hover over the chart to read the ecliptic longitude and latitude under the pointer (the numbers the stars use in data/aureth.yaml), and the nearest named star. "
+                     "While it is on, hovering a star shows the readout instead of the star's own tooltip.")
+    _preview = None
+    if ss["m_pick"]:
+        with st.expander("Preview a star at coordinates you choose", expanded=False):
+            st.caption("Read a spot off the chart, type it here, and see where a star would sit before you edit data/aureth.yaml.")
+            pc1, pc2, pc3, pc4 = st.columns(4)
+            _pv_on = pc1.checkbox("Show the preview", key="m_pv_on")
+            _pv_lon = pc2.number_input("Ecliptic longitude (°)", 0.0, 360.0, step=0.5, key="m_pv_lon")
+            _pv_lat = pc3.number_input("Ecliptic latitude (°)", -90.0, 90.0, step=0.5, key="m_pv_lat")
+            _pv_mag = pc4.number_input("Brightness (magnitude)", -2.0, 6.0, step=0.1, key="m_pv_mag", help="Smaller is brighter.")
+            st.code(f'- {{name: "New star", lon: {_pv_lon:.1f}, lat: {_pv_lat:.1f}, mag: {_pv_mag:.1f}, color: "#ffffff", label: true}}', language="yaml")
+            st.caption("Paste that line into the `stars` list under `sky` in data/aureth.yaml, change the name and colour, then press Reload data files.")
+            if _pv_on:
+                _preview = {"lon": float(_pv_lon), "lat": float(_pv_lat), "mag": float(_pv_mag), "name": "preview"}
 
     _mw = load_sky()[1]
     _fs = load_faint_settings()
     _faint = faint_stars(_mw, _fs["n_band"], _fs["n_field"], int(ss.get("v_sky_seed", _fs["seed"]))) if ss["m_faint"] else None
     _shown = [c for c in sets_all if c["name"] in ss["m_sets"]]
     _fig, _rows = star_map_figure(ss["m_hemi"], _shown, _mw, faint=_faint, star_names=ss["m_stars"], figure_names=ss["m_figs"],
-                                  show_glow=ss["m_glow"], query=ss["m_query"], height=820)
+                                  show_glow=ss["m_glow"], query=ss["m_query"], height=820, pick=ss["m_pick"], preview=_preview)
     st.plotly_chart(_fig, width="stretch", config={"displaylogo": False, "toImageButtonOptions": {"width": 1600, "height": 1600, "scale": 1}})
     if ss["m_query"].strip():
         other = [r for r in _rows if r["Chart"] != ("Northern" if ss["m_hemi"] == "north" else "Southern")]

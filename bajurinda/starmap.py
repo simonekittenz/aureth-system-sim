@@ -80,7 +80,8 @@ def glow_grid(mw: MilkyWay, hemi: str, step: float = 1.0):
 
 
 def star_map_figure(hemi: str, sets: list[dict], mw: MilkyWay, *, faint: tuple[np.ndarray, np.ndarray] | None = None, star_names: bool = True,
-                    figure_names: bool = True, show_glow: bool = True, query: str = "", height: int = 820) -> tuple[go.Figure, list[dict]]:
+                    figure_names: bool = True, show_glow: bool = True, query: str = "", height: int = 820, pick: bool = False,
+                    preview: dict | None = None) -> tuple[go.Figure, list[dict]]:
     """Returns the figure and a list describing every figure (constellation) that matches `query` (all of them if it is empty)."""
     stars, _ = load_sky()
     vec = {s.name: ecl_vec(np.array(s.lon), np.array(s.lat)) for s in stars}
@@ -156,7 +157,8 @@ def star_map_figure(hemi: str, sets: list[dict], mw: MilkyWay, *, faint: tuple[n
     star_hit = [bool(q) and q in s.name.lower() for s in ks]
     fig.add_trace(go.Scatter(x=x[k], y=y[k], mode="markers", showlegend=False,
                              marker=dict(size=[round(float(np.clip(8.5 - 2.0 * s.mag, 4, 15)), 1) for s in ks], color=[s.color for s in ks], line=dict(width=0)),
-                             hovertemplate="%{customdata[0]}<br>brightness %{customdata[1]}<br>longitude %{customdata[2]:.1f}°, latitude %{customdata[3]:+.1f}°<extra></extra>",
+                             hoverinfo="skip" if pick else None,
+                             hovertemplate=None if pick else "%{customdata[0]}<br>brightness %{customdata[1]}<br>longitude %{customdata[2]:.1f}°, latitude %{customdata[3]:+.1f}°<extra></extra>",
                              customdata=[[s.name, s.mag, s.lon, s.lat] for s in ks]))
     if star_names:
         fig.add_trace(go.Scatter(x=x[k], y=y[k], mode="text", showlegend=False, hoverinfo="skip", textposition="bottom right",
@@ -169,6 +171,18 @@ def star_map_figure(hemi: str, sets: list[dict], mw: MilkyWay, *, faint: tuple[n
             if h:
                 matches.append({"Constellation": f"(star) {s.name}", "Set": "", "Centre longitude": round(s.lon), "Centre latitude": round(s.lat),
                                 "Chart": "Northern" if s.lat >= 0 else "Southern", "Stars": 1, "Brightest star": s.name})
+    if preview:
+        pv = ecl_vec(np.array(preview["lon"]), np.array(preview["lat"]))[None, :]
+        px, py, pr = project(pv, hemi)
+        if float(pr[0]) <= EDGE:
+            fig.add_trace(go.Scatter(x=[float(px[0])], y=[float(py[0])], mode="markers+text", text=[preview.get("name", "preview")], textposition="bottom right",
+                                     textfont=dict(color="#ff6fa5", size=13), hoverinfo="skip", showlegend=False,
+                                     marker=dict(symbol="circle-open", size=max(18, 22 - 3 * preview.get("mag", 1.0)), color="#ff006e", line=dict(width=2))))
+            fig.add_trace(go.Scatter(x=[float(px[0])], y=[float(py[0])], mode="markers", marker=dict(size=5, color="#ff006e"), hoverinfo="skip", showlegend=False))
+    if pick:
+        gx, gy, gt = _pick_grid(hemi, stars)
+        fig.add_trace(go.Heatmap(x=gx, y=gy, z=np.zeros((len(gy), len(gx))), text=gt, hovertemplate="%{text}<extra></extra>", showscale=False,
+                                 colorscale=[[0, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0)"]], hoverongaps=False, zsmooth=False))
     pad = 4
     fig.update_layout(height=height, margin=dict(l=0, r=0, t=0, b=0), plot_bgcolor="rgb(10,13,28)", paper_bgcolor="rgba(0,0,0,0)", annotations=ann,
                       xaxis=dict(range=[-LABEL_R - pad, LABEL_R + pad], visible=False, fixedrange=False),
@@ -194,3 +208,28 @@ def find(sets: list[dict], query: str) -> list[dict]:
         if q in s.name.lower():
             out.append({"kind": "star", "name": s.name, "lat": s.lat})
     return out
+
+
+def _pick_grid(hemi: str, stars, step: float = 1.5):
+    """A fine invisible grid over the chart whose hover text gives the sky coordinates under the pointer, and the nearest named star."""
+    xs = np.arange(-EDGE, EDGE + 1e-9, step)
+    X, Y = np.meshgrid(xs, xs)
+    r = np.hypot(X, Y)
+    sgn = 1 if hemi == "north" else -1
+    lon = np.degrees(np.arctan2(sgn * X, Y)) % 360
+    lat = (90 - r) if hemi == "north" else (r - 90)
+    lr, br = np.radians(lon), np.radians(lat)
+    v = np.stack([np.cos(br) * np.cos(lr), np.cos(br) * np.sin(lr), np.sin(br)], axis=-1)
+    near = np.full(r.shape, "", dtype=object)
+    if stars:
+        sv = ecl_vec(np.array([s.lon for s in stars]), np.array([s.lat for s in stars]))
+        sep = np.degrees(np.arccos(np.clip(v @ sv.T, -1, 1)))
+        j = sep.argmin(axis=-1)
+        sm = np.take_along_axis(sep, j[..., None], axis=-1)[..., 0]
+        for q in np.flatnonzero((sm < 2.5).ravel()):
+            near.ravel()[q] = f"<br>near {stars[int(j.ravel()[q])].name} ({sm.ravel()[q]:.1f}° away)"
+    text = np.empty(r.shape, dtype=object)
+    flat = text.ravel()
+    for q, (lo, la, rr, nr) in enumerate(zip(lon.ravel(), lat.ravel(), r.ravel(), near.ravel())):
+        flat[q] = "" if rr > EDGE else f"<b>longitude {lo:.1f}°  latitude {la:+.1f}°</b><br>(ecliptic){nr}"
+    return xs, xs, text
