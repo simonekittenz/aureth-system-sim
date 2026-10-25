@@ -42,7 +42,7 @@ for _k, _v in ss.get("_moons_saved", {}).items():
     if _k not in ss:
         ss[_k] = _v
 for _k, _v in {"v_pov": "Bayurinda", "v_window": 240, "v_step": 3, "v_lat": 10, "v_lon": 0, "v_unit": "Earth days", "v_sky_year": 1, "v_sky_day": 1,
-               "v_sky_clock": 0.0, "v_sky_view": "Panorama", "v_sky_fov": 180, "v_sky_height": 860, "v_sky_look": "Liwaya", "v_sky_scale": 12,
+               "v_sky_clock": 0.0, "v_sky_time": "local", "v_sky_view": "Panorama", "v_sky_fov": 180, "v_sky_height": 860, "v_sky_look": "Liwaya", "v_sky_scale": 12,
                "v_sky_pick": False, "v_sky_pv_on": False, "v_sky_pv_lon": 100.0, "v_sky_pv_lat": 20.0, "v_sky_pv_mag": 1.0,
                "v_sky_always": False, "v_sky_move": 10, "v_con_show": None, "v_con_labels": True, "v_con_edit": None, "v_con_fig": None,
                "v_sky_named": True, "v_sky_mw": True, "v_sky_faint": True, "v_sky_seed": load_faint_settings()["seed"], "v_sky_step": "30 minutes", "v_sky_span": "1 day", "v_sky_ms": 140}.items():
@@ -611,9 +611,13 @@ with T["Landmarks"]:
 # ------------------------------------------------------------------ Night sky
 with T["Night sky"]:
     st.subheader(f"The sky from {planet.name}")
+    same_instant = ss["v_sky_time"] == "world"
     st.write(f"What you would see standing at **latitude {lat}°, longitude {lon}°** (set them in the sidebar), on a flat horizon. "
-             "Time is local mean solar time: midnight at longitude 0 is the founding moment, when the star and the three planets "
-             "are in a line" + (" and both moons are full overhead." if has_moons else "."))
+             + ("Time is the **world clock**, the clock at longitude 0, and every longitude sees the same instant, so moving east or west turns the planet under the sky. "
+                if same_instant else
+                "Time is **local solar time**: the clock moves with you, so the Sun is in the same place at the same reading wherever you stand. ")
+             + "Midnight at longitude 0 is the founding moment, when the star and the three planets are in a line"
+             + (" and both moons are full overhead." if has_moons else "."))
 
     def jump_founding():
         st.session_state.update({"v_sky_year": 1, "v_sky_day": 1, "v_sky_clock": 0.0})
@@ -631,10 +635,15 @@ with T["Night sky"]:
     if ss["v_sky_span"] not in SPANS:                     # the moon-month label changes with the settings
         ss["v_sky_span"] = "1 day"
 
+    st.radio("Time is", ["local", "world"], key="v_sky_time", horizontal=True,
+             format_func=lambda v: "Local time at the observer" if v == "local" else "Same instant everywhere (world clock)",
+             help="Local time: the clock follows you, so the stars barely change with longitude. Same instant: the clock is the one at "
+                  "longitude 0 and every longitude sees that moment, so longitude turns the sky.")
     k1, k2, k3, k4 = st.columns([1, 1, 2, 1.2])
     k1.number_input("Start: year", 1, 5000, step=1, key="v_sky_year")
     k2.number_input("Day of the year", 1, int(round(year_len)), step=1, key="v_sky_day")
-    k3.slider(f"Start at local time (hours after midnight; a day is {day_h:g} hours)", 0.0, float(int(2 * day_h - 1) / 2), step=0.25, key="v_sky_clock")
+    k3.slider(f"Start at time (hours after midnight; a day is {day_h:g} hours)", 0.0, float(int(2 * day_h - 1) / 2), step=0.25, key="v_sky_clock",
+              help="Read as local time or as the world clock, depending on the 'Time is' choice above.")
     k4.button("Jump to the founding moment", on_click=jump_founding)
     p1, p2, p3 = st.columns(3)
     step_label = p1.select_slider("Time between frames", list(STEPS), key="v_sky_step")
@@ -842,11 +851,11 @@ with T["Night sky"]:
     start_h = float(ss["v_sky_clock"])
 
     @st.cache_data(show_spinner="Working out the sky...")
-    def get_sky(system: System, lat_: float, lon_: float, day_: float, start_: float, span_: float, step_: float):
-        return compute_sky(system, lat_, lon_, day_, start_, span_, step_)
+    def get_sky(system: System, lat_: float, lon_: float, day_: float, start_: float, span_: float, step_: float, same_: bool):
+        return compute_sky(system, lat_, lon_, day_, start_, span_, step_, same_)
 
-    sky = get_sky(system, float(lat), float(lon), float(day_total), start_h, float(span_h), float(step_h))
-    ref = sky if (abs(span_h - day_h) < 1e-9 and abs(step_h - 0.5) < 1e-9) else get_sky(system, float(lat), float(lon), float(day_total), start_h, day_h, 0.5)
+    sky = get_sky(system, float(lat), float(lon), float(day_total), start_h, float(span_h), float(step_h), same_instant)
+    ref = sky if (abs(span_h - day_h) < 1e-9 and abs(step_h - 0.5) < 1e-9) else get_sky(system, float(lat), float(lon), float(day_total), start_h, day_h, 0.5, same_instant)
     compass = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SW": 225, "W": 270, "NW": 315}
     center = float(compass[look]) if look in compass else find_sight(sky, look, 0)
     def move_by(dlat: int, dlon: int):
@@ -878,7 +887,8 @@ with T["Night sky"]:
                        "These are positions on the sky, not on the planet's surface. Narrow the panorama width for finer pointing.")
         else:
             st.caption(f"{len(sky.clock)} frames from {sky.labels[0]} to {sky.labels[-1]}. Press Play or drag the slider under the picture. "
-                       "Hover over the picture and use the arrows at its top right to go full screen.")
+                       "Hover over the picture and use the arrows at its top right to go full screen."
+                       + (" Times are the world clock at longitude 0; 'here' is the local time where you stand." if same_instant else ""))
     st.caption(f"The table and the dotted paths describe the first moment and the {day_h:g} hours after it. Faded objects are below the horizon; "
                + ("the bright side of each moon faces Aureth. Nineya is close enough that where you stand shifts it against the sky. " if has_moons else "")
                + "The stars and the Milky Way are placeholders you can edit in data/aureth.yaml.")

@@ -81,6 +81,13 @@ Play button that runs a time-lapse. The picture sits at the top of the tab, its 
 full-screen button at its top right goes larger still. You choose the start, the time between frames (5 minutes to 10 days), how long it plays
 (an hour to four years) and the speed. The founding moment is the default view.
 
+### Local time or the same instant
+
+**Time is** switches the clock. *Local time at the observer* (the default) follows you, as time zones do: the Sun is in the same place at the
+same reading wherever you stand, so the stars barely change with longitude. *Same instant everywhere* uses the world clock at longitude 0,
+so every longitude sees the same moment and moving east or west turns the planet under the sky. The labels then show the world clock and, in
+brackets, the local time where you stand.
+
 ### Moving around and star-chart mode
 
 Above the Night sky picture, the **West / North / South / East** buttons move your position on Bayurinda by the chosen step (1° to 45°),

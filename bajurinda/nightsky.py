@@ -92,24 +92,38 @@ def _altaz(v, U, E, N):
     return alt, az
 
 
-def compute_sky(system: System, lat: float, lon: float, day_total: float, start_hour: float = 0.0,
-                span_hours: float = 19.0, step_hours: float = 0.5) -> SkyData:
-    """The sky from (lat, lon) at a run of moments, in local mean solar time (a day is `planet.solar_day_hours` long: 19 on Bayurinda).
+def _hhmm(hours: float) -> str:
+    total = int(round(hours * 60))
+    return f"{total // 60:02d}:{total % 60:02d}"
 
-    `day_total` counts days since the founding moment, which is local midnight on day 0 at longitude 0. The run starts
-    `start_hour` hours into that day and lasts `span_hours`, with one frame every `step_hours`."""
+
+def compute_sky(system: System, lat: float, lon: float, day_total: float, start_hour: float = 0.0,
+                span_hours: float = 19.0, step_hours: float = 0.5, same_instant: bool = False) -> SkyData:
+    """The sky from (lat, lon) at a run of moments (a day is `planet.solar_day_hours` long: 19 on Bayurinda).
+
+    `day_total` counts days since the founding moment, which is midnight on day 0 at longitude 0. The run starts `start_hour`
+    hours into that day and lasts `span_hours`, with one frame every `step_hours`.
+
+    By default the clock is the observer's own local solar time: the same clock reading gives nearly the same sky at any
+    longitude, because the Sun is in the same place. With `same_instant` the clock is the one at longitude 0 and every longitude
+    sees that same moment, so moving east or west turns the planet under the sky; labels then also show the local time."""
     pl = system.planet
     D = pl.local_day_days
+    H = pl.solar_day_hours
     lat = max(-89.5, min(89.5, lat))
     n = int(round(span_hours / step_hours)) + 1
     hours = start_hour + step_hours * np.arange(n)
-    days = day_total + hours / pl.solar_day_hours
-    t = (days - lon / 360.0) * D
+    days = day_total + hours / H
+    t = (days if same_instant else days - lon / 360.0) * D
     year_len = pl.year_solar_days
     days_r = np.round(days, 7)                              # avoid 0.99999999 showing as the end of the previous day
-    clock = (days_r - np.floor(days_r)) * pl.solar_day_hours
-    labels = [f"year {int(np.floor(dd / year_len)) + 1}, day {int(np.floor(dd % year_len)) + 1}, "
-              f"{int(c):02d}:{int(round((c % 1) * 60)) % 60:02d}" for dd, c in zip(days_r, clock)]
+    clock = (days_r - np.floor(days_r)) * H
+    labels = [f"year {int(np.floor(dd / year_len)) + 1}, day {int(np.floor(dd % year_len)) + 1}, {_hhmm(c)}" for dd, c in zip(days_r, clock)]
+    if same_instant:
+        local = np.round(days + lon / 360.0, 7)
+        local_clock = (local - np.floor(local)) * H
+        labels = [f"{lab} (here {_hhmm(c)})" for lab, c in zip(labels, local_clock)]
+        clock = local_clock
     mp, sp, op = moons_at(system, t)
     s = spin_axis(pl)
     U = surface_normal(pl, lat, lon, t)
