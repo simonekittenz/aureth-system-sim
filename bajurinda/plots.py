@@ -93,6 +93,20 @@ def phase_figure(system: System, track: Track, unit_days: float, unit_label: str
     return fig
 
 
+def size_figure(system: System, track: Track, unit_days: float, unit_label: str) -> go.Figure:
+    """How wide each moon and the Sun look from the planet's centre over time (degrees)."""
+    x = track.t / unit_days
+    fig = go.Figure()
+    for k, m in enumerate(system.moons):
+        d = np.linalg.norm(track.moon_pos[:, k], axis=1)
+        fig.add_trace(go.Scatter(x=x, y=np.degrees(2 * np.arctan(m.radius_km / d)), name=m.name, line=dict(color=COL[m.name])))
+    sun = np.degrees(2 * np.arctan(system.planet.star_radius_km / np.linalg.norm(track.star_pos, axis=1)))
+    fig.add_trace(go.Scatter(x=x, y=sun, name="Sun", line=dict(color=COL["Sun"], dash="dot")))
+    fig.update_layout(height=300, margin=dict(l=10, r=10, t=10, b=10), xaxis_title=unit_label, yaxis_title="looks this wide (degrees)",
+                      legend=dict(orientation="h", y=1.1))
+    return fig
+
+
 def sky_discs_figure(system: System, track: Track, i: int) -> go.Figure:
     pl = system.planet
     fig = go.Figure()

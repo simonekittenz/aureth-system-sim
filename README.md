@@ -81,6 +81,15 @@ Play button that runs a time-lapse. The picture sits at the top of the tab, its 
 full-screen button at its top right goes larger still. You choose the start, the time between frames (5 minutes to 10 days), how long it plays
 (an hour to four years) and the speed. The founding moment is the default view.
 
+### Moon designs
+
+The sidebar's **Moon design** picks the moons' settings. *Design B* is the settled design (nearly round orbits). *Design C* is an experiment for a
+captured Liwaya: its orbit is eccentric (0.08) and tilted 2 degrees, so it swells and shrinks by about 6% either way each month; Liwaya is a little
+denser and smaller (3.6 g/cm3) and Nineya a little lighter and bigger (3.0 g/cm3), each with the same mass as before. The starting distances were
+retuned so the phase cycles stay at 38.5 and 9.70 days. The "How big each looks" chart in Phases & sky shows the swelling.
+In the tests Design C stayed stable for 10,000 years; eccentricity 0.10 starts to fail some random starts and 0.15 breaks Nineya's orbit.
+Liwaya's eccentricity also pumps Nineya's to about the same value, so Nineya swells and shrinks too.
+
 ### Local time or the same instant
 
 **Time is** switches the clock. *Local time at the observer* (the default) follows you, as time zones do: the Sun is in the same place at the

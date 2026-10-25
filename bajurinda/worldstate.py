@@ -13,6 +13,7 @@ import streamlit as st
 from .aureth import Star
 from .constants import M_EARTH, M_SUN
 from .model import Moon
+from .presets import DEFAULT_PRESET, PRESETS
 from .world import World
 
 PLANET_KEYS = ("radius", "mass", "rot", "sid", "a", "ecc", "obl", "ph")
@@ -41,7 +42,7 @@ def _moon_defaults(base: World) -> dict:
 
 def defaults(base: World) -> dict:
     p0 = base.planets[0]
-    return {**_planet_defaults(base), **_moon_defaults(base), "w_star_mass": float(p0.star_mass_msun), "w_star_lum": float(p0.star_luminosity_lsun),
+    return {**_planet_defaults(base), **_moon_defaults(base), "w_design": DEFAULT_PRESET, "w_star_mass": float(p0.star_mass_msun), "w_star_lum": float(p0.star_luminosity_lsun),
             "w_star_rad": float(p0.star_radius_rsun)}
 
 
@@ -100,9 +101,14 @@ def reset_planet(name: str, base: World) -> None:
     _reset([f"w_{name}_{k}" for k in PLANET_KEYS], base)
 
 
-def reset_moons(host: str, base: World) -> None:
-    keys = [f"w_{m.name}_{f}" for h, ms in base.moons if h == host for m in ms for f in MOON_FIELDS]
-    _reset(keys, base)
+def apply_design(host: str, name: str | None = None) -> None:
+    """Set the moons' settings to one of the designs in presets.py."""
+    name = name or st.session_state["w_design"]
+    _, liw, nin = PRESETS[name]
+    for m in (liw, nin):
+        st.session_state.update({f"w_{m.name}_dia": float(m.diameter_km), f"w_{m.name}_rho": float(m.density_gcc), f"w_{m.name}_a": float(m.a_km),
+                                 f"w_{m.name}_e": float(m.ecc), f"w_{m.name}_inc": float(m.inc_deg), f"w_{m.name}_M": float(m.mean_anomaly_deg),
+                                 f"w_{m.name}_Om": float(m.asc_node_deg), f"w_{m.name}_w": float(m.arg_peri_deg)})
 
 
 def star_editor(base: World) -> None:
@@ -149,7 +155,10 @@ def orbit_editor(p, base: World) -> None:
 
 
 def moon_editors(host: str, base: World) -> None:
-    st.button("Reset moons to Design B", on_click=reset_moons, args=(host, base), key=f"reset_moons_{host}")
+    st.selectbox("Moon design", list(PRESETS), key="w_design", on_change=apply_design, args=(host,),
+                 help="Design B is the settled design. Design C is an experiment: Liwaya on an eccentric orbit, so it swells and shrinks.")
+    st.caption(PRESETS[st.session_state["w_design"]][0])
+    st.button("Reset the moons to this design", on_click=apply_design, args=(host,), key=f"reset_moons_{host}")
     for h, ms in base.moons:
         if h != host:
             continue

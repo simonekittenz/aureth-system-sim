@@ -58,7 +58,8 @@ with st.sidebar:
                        help="Whose sky, seasons and calendar to look at. The star and the planets are the same ones as on the Aureth system page.")
     base_p = BASE.planet(pov)
     has_moons_base = bool(BASE.moons_of(pov))
-    st.caption(PRESETS[DEFAULT_PRESET][0] if has_moons_base else f"{pov} has no moons in the world files yet.")
+    if not has_moons_base:
+        st.caption(f"{pov} has no moons in the world files yet.")
 
     with st.expander("Star (Aureth)", expanded=False):
         star_editor(BASE)
@@ -289,6 +290,11 @@ if has_moons:
 
         st.subheader("Phase timeline")
         st.plotly_chart(plots.phase_figure(system, track, unit_days, unit_label), width="stretch")
+
+        st.subheader("How big each looks")
+        st.plotly_chart(plots.size_figure(system, track, unit_days, unit_label), width="stretch")
+        st.caption("A moon on a rounder orbit stays about the same size; an eccentric orbit makes it swell as it nears the planet and shrink as it "
+                   "drifts away. Where a moon's line is above the Sun's dotted line it can cover the whole Sun (total eclipse); below it, a ring is left.")
 
 # ------------------------------------------------------------------ Tides
 if has_moons:
