@@ -15,6 +15,9 @@ from bajurinda.aureth import (
 )
 from bajurinda.cycles import axial_precession, great_cycle, moon_cycles, orbit_secular, plane_cycle_years, planet_repeat
 from bajurinda.flights import route_extremes, scan_route
+from bajurinda.constellations import load_constellations
+from bajurinda.starfield import faint_stars, load_faint_settings, load_sky
+from bajurinda.starmap import find as find_on_map, hemisphere_of, star_map_figure
 from bajurinda.world import load_world
 from bajurinda.worldstate import ensure_state, orbit_editor, remember, star_editor, world_from_state
 from bajurinda.transfers import find_windows, hohmann, porkchop
@@ -24,6 +27,11 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 BASE = load_world()
 ss = st.session_state
 ensure_state(BASE)
+for _k, _v in ss.get("_map_saved", {}).items():       # the star map's settings survive a visit to the other page
+    if _k not in ss:
+        ss[_k] = _v
+for _k in [k for k in ss.keys() if k.startswith("m_")]:
+    ss[_k] = ss[_k]
 
 with st.sidebar:
     st.subheader("Aureth system")
@@ -61,11 +69,12 @@ st.caption("Time is counted from the founding moment (the double full moon), whe
            f"start in a line. Dates read 'year, day' in Bayurindan years of {BAYURINDA.year_solar_days:.0f} solar days. Orbits are flat and coplanar "
            "(a placeholder), and Ashara's eccentricity is a placeholder. Planet positions come from one N-body simulation, the same one the Planet view uses.")
 
-tabs = st.tabs(["Orbits", "Cycles", "Sky from Bayurinda", "Transfers", "Long cycles", "Stability"])
+TAB_NAMES = ["Orbits", "Cycles", "Sky from Bayurinda", "Constellation map", "Transfers", "Long cycles", "Stability"]
+T = dict(zip(TAB_NAMES, st.tabs(TAB_NAMES)))
 
 
 # ------------------------------------------------------------------ Orbits
-with tabs[0]:
+with T["Orbits"]:
     years = st.select_slider("Years to animate (Earth years)", [2, 5, 10, 20], value=5)
 
     @st.cache_data(show_spinner="Integrating the planets...")
@@ -79,7 +88,7 @@ with tabs[0]:
 
 
 # ------------------------------------------------------------------ Cycles
-with tabs[1]:
+with T["Cycles"]:
     st.subheader("Planets")
     rows = []
     for r in planet_table(STAR, BODIES):
@@ -118,7 +127,7 @@ with tabs[1]:
 
 
 # ------------------------------------------------------------------ Sky
-with tabs[2]:
+with T["Sky from Bayurinda"]:
     st.subheader("What Bayurinda's sky shows")
     s_years = st.select_slider("Years to look at (Earth years)", [5, 10, 20, 40, 80], value=20, key="sky_years")
     t = np.arange(0, s_years * 365.25, 1.0)
@@ -158,8 +167,62 @@ with tabs[2]:
     st.caption("Angles are seen from Bayurinda's centre. Planets close to the Sun in the sky (small angle) are lost in its glare.")
 
 
+# ------------------------------------------------------------------ Constellation map
+with T["Constellation map"]:
+    st.subheader("Constellation map")
+    st.write("The whole sky as two round charts, one for each side of the plane the planets orbit in. It does not depend on which planet you stand on, "
+             "so it is the finder for the constellation sets and the bright stars. Positions are ecliptic longitude (around the edge) and latitude "
+             "(the rings): the northern chart is centred on the ecliptic's north pole and the bold ring is the ecliptic itself. They are drawn as you would see "
+             "them looking up.")
+    sets_all = ss.get("_con_work") or load_constellations()
+    set_names_ = [c["name"] for c in sets_all]
+    if "m_sets" not in ss:
+        ss["m_sets"] = [n for n in ss.get("v_con_show", []) if n in set_names_] or set_names_[:1]
+    ss["m_sets"] = [n for n in ss["m_sets"] if n in set_names_]
+    for _k, _v in {"m_hemi": "north", "m_query": "", "m_figs": True, "m_stars": True, "m_faint": True, "m_glow": True}.items():
+        if _k not in ss:
+            ss[_k] = _v
+
+    def jump_to_match():
+        hits = find_on_map(ss.get("_con_work") or load_constellations(), ss["m_query"])
+        if hits:
+            ss["m_hemi"] = hemisphere_of(hits[0]["lat"])
+
+    q1, q2 = st.columns([2, 3])
+    q1.text_input("Find a constellation or star", key="m_query", placeholder="Search constellation...", on_change=jump_to_match,
+                  help="Type part of a name. The matching constellation is drawn thick and boxed, the rest fade, and the chart switches to the side it is on.")
+    q2.multiselect("Show these constellation sets", set_names_, key="m_sets",
+                   help="The sets come from the Constellation sets box on the Planet view page (unsaved edits show here too).")
+    o1, o2, o3, o4, o5 = st.columns([1.3, 1, 1, 1, 1])
+    o1.radio("Chart", ["north", "south"], key="m_hemi", horizontal=True, format_func=lambda h: "Northern" if h == "north" else "Southern")
+    o2.checkbox("Constellation names", key="m_figs")
+    o3.checkbox("Star names", key="m_stars")
+    o4.checkbox("Faint stars", key="m_faint")
+    o5.checkbox("Milky Way", key="m_glow")
+
+    _mw = load_sky()[1]
+    _fs = load_faint_settings()
+    _faint = faint_stars(_mw, _fs["n_band"], _fs["n_field"], int(ss.get("v_sky_seed", _fs["seed"]))) if ss["m_faint"] else None
+    _shown = [c for c in sets_all if c["name"] in ss["m_sets"]]
+    _fig, _rows = star_map_figure(ss["m_hemi"], _shown, _mw, faint=_faint, star_names=ss["m_stars"], figure_names=ss["m_figs"],
+                                  show_glow=ss["m_glow"], query=ss["m_query"], height=820)
+    st.plotly_chart(_fig, width="stretch", config={"displaylogo": False, "toImageButtonOptions": {"width": 1600, "height": 1600, "scale": 1}})
+    if ss["m_query"].strip():
+        other = [r for r in _rows if r["Chart"] != ("Northern" if ss["m_hemi"] == "north" else "Southern")]
+        st.markdown(f"**Matches for '{ss['m_query'].strip()}'**" + (f" ({len(other)} on the other chart)" if other else ""))
+        if not _rows:
+            st.info("Nothing matches. Check the spelling, or that the constellation's set is ticked in 'Show these constellation sets'.")
+    else:
+        st.markdown("**Constellations in the shown sets**")
+    if _rows:
+        st.dataframe(pd.DataFrame(_rows), hide_index=True, width="stretch", height=min(380, 38 + 35 * len(_rows)))
+    st.caption("Each dashed line follows the shortest path between two stars on the sky, so it curves on a flat chart. Hover over a star for its name and position. "
+               "The stars, their names and the galaxy are placeholders you can edit in data/aureth.yaml.")
+    ss["_map_saved"] = {k: v for k, v in ss.items() if k.startswith("m_")}
+
+
 # ------------------------------------------------------------------ Transfers
-with tabs[3]:
+with T["Transfers"]:
     st.subheader("Sternreyker flights")
     st.write("A Sternreyker pilot keeps the vessel accelerating the whole way: speed up until halfway, then brake to stop at the "
              "destination. There are no launch windows. What changes from day to day is how far apart the two planets are, "
@@ -256,7 +319,7 @@ with tabs[3]:
 
 
 # ------------------------------------------------------------------ Long cycles
-with tabs[4]:
+with T["Long cycles"]:
     st.subheader("Longer cycles for Bayurinda")
     st.write("Cycles of different lengths, from the moons' months up to the slow wobble of the planet's axis. Moons are the "
              "selected Design B. Measuring takes about 20 seconds because it follows the moons for 250 years and the planets for 400,000.")
@@ -344,7 +407,7 @@ with tabs[4]:
 
 
 # ------------------------------------------------------------------ Stability
-with tabs[5]:
+with T["Stability"]:
     st.subheader("Do the planets keep their orbits?")
     s1, s2 = st.columns(2)
     s_len = s1.select_slider("Years to simulate (Earth years)", [100, 1000, 10_000, 100_000], value=1000)

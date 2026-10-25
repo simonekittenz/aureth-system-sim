@@ -85,6 +85,23 @@ def band_edges(mw: MilkyWay, scale: float, n: int = 72, l0: float = 0.0, l1: flo
     return u * np.cos(w) + P * np.sin(w), u * np.cos(w) - P * np.sin(w)
 
 
+def milky_way_glow(v: np.ndarray, mw: MilkyWay) -> np.ndarray:
+    """Brightness (0 to 1) of the galaxy's glow in the direction of each unit vector in `v` (shape (..., 3)), from the same numbers that
+    draw the band in the night-sky pictures: its width, the swelling at the centre, the dark rift and the extra patches."""
+    C, E2, P = mw_basis(mw)
+    b = np.degrees(np.arcsin(np.clip(v @ P, -1, 1)))
+    l = np.degrees(np.arctan2(v @ E2, v @ C)) % 360
+    hw = half_width(l, mw)
+    glow = np.exp(-0.5 * (b / (0.8 * hw)) ** 2) * (0.55 + 0.45 * _bulge(l, mw))
+    span = (mw.rift_to - mw.rift_from) % 360
+    in_rift = ((l - mw.rift_from) % 360) <= span
+    glow = glow * (1 - mw.rift_strength * 0.75 * in_rift * np.exp(-0.5 * (b / (0.3 * hw)) ** 2))
+    for lon_, lat_, size_, strength in mw.patches:
+        ang = np.degrees(np.arccos(np.clip(v @ ecl_vec(np.array(lon_), np.array(lat_)), -1, 1)))
+        glow = glow + 0.5 * strength * np.exp(-0.5 * (ang / size_) ** 2)
+    return np.clip(glow * mw.brightness, 0, 1)
+
+
 def circle_on_sky(lon: float, lat: float, radius_deg: float, n: int = 20) -> np.ndarray:
     c = ecl_vec(np.array(lon), np.array(lat))
     t1 = np.cross(c, [0.0, 0.0, 1.0])
