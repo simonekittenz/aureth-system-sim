@@ -16,7 +16,7 @@ from .model import Moon
 from .presets import DEFAULT_PRESET, PRESETS
 from .world import World
 
-PLANET_KEYS = ("radius", "mass", "rot", "sid", "a", "ecc", "obl", "ph")
+PLANET_KEYS = ("radius", "mass", "rot", "sid", "a", "ecc", "obl", "ph", "axis")
 MOON_FIELDS = ("dia", "rho", "a", "e", "inc", "M", "Om", "w")
 
 
@@ -26,7 +26,8 @@ def _planet_defaults(base: World) -> dict:
         n = p.name
         out.update({f"w_{n}_radius": float(p.radius_km), f"w_{n}_mass": float(p.mass_earth), f"w_{n}_rot": float(p.rotation_hours),
                     f"w_{n}_sid": "sidereal" if p.rotation_is_sidereal else "solar", f"w_{n}_a": float(p.a_au), f"w_{n}_ecc": float(p.ecc),
-                    f"w_{n}_obl": float(p.obliquity_deg), f"w_{n}_ph": float(p.mean_anomaly_deg)})
+                    f"w_{n}_obl": float(p.obliquity_deg), f"w_{n}_ph": float(p.mean_anomaly_deg),
+                    f"w_{n}_axis": float(p.axis_azimuth_deg)})
     return out
 
 
@@ -42,7 +43,7 @@ def _moon_defaults(base: World) -> dict:
 
 def defaults(base: World) -> dict:
     p0 = base.planets[0]
-    return {**_planet_defaults(base), **_moon_defaults(base), "w_design": DEFAULT_PRESET, "w_star_mass": float(p0.star_mass_msun), "w_star_lum": float(p0.star_luminosity_lsun),
+    return {**_planet_defaults(base), **_moon_defaults(base), "w_design": DEFAULT_PRESET, "w_start_seed": int(base.start_seed), "w_star_mass": float(p0.star_mass_msun), "w_star_lum": float(p0.star_luminosity_lsun),
             "w_star_rad": float(p0.star_radius_rsun)}
 
 
@@ -77,13 +78,13 @@ def world_from_state(base: World) -> World:
         planets.append(replace(
             p, radius_km=ss[f"w_{n}_radius"], mass_kg=ss[f"w_{n}_mass"] * M_EARTH, rotation_hours=ss[f"w_{n}_rot"],
             rotation_is_sidereal=ss[f"w_{n}_sid"] == "sidereal", a_au=ss[f"w_{n}_a"], ecc=ss[f"w_{n}_ecc"], obliquity_deg=ss[f"w_{n}_obl"],
-            mean_anomaly_deg=ss[f"w_{n}_ph"], star_mass_kg=ss["w_star_mass"] * M_SUN, star_luminosity_lsun=ss["w_star_lum"],
+            mean_anomaly_deg=ss[f"w_{n}_ph"], axis_azimuth_deg=ss[f"w_{n}_axis"], star_mass_kg=ss["w_star_mass"] * M_SUN, star_luminosity_lsun=ss["w_star_lum"],
             star_radius_rsun=ss["w_star_rad"]))
     moons = tuple(
         (host, tuple(Moon(m.name, ss[f"w_{m.name}_dia"], ss[f"w_{m.name}_rho"], float(ss[f"w_{m.name}_a"]), ss[f"w_{m.name}_e"],
                           ss[f"w_{m.name}_inc"], ss[f"w_{m.name}_M"], ss[f"w_{m.name}_Om"], ss[f"w_{m.name}_w"]) for m in ms))
         for host, ms in base.moons)
-    return World(star, tuple(planets), moons)
+    return World(star, tuple(planets), moons, base.start_seed, base.start_distances)
 
 
 # ------------------------------------------------------------------ widgets
@@ -101,14 +102,33 @@ def reset_planet(name: str, base: World) -> None:
     _reset([f"w_{name}_{k}" for k in PLANET_KEYS], base)
 
 
-def apply_design(host: str, name: str | None = None) -> None:
-    """Set the moons' settings to one of the designs in presets.py."""
-    name = name or st.session_state["w_design"]
+def start_matches_saved(base: World) -> bool:
+    ss = st.session_state
+    d = defaults(base)
+    return all(abs(float(ss.get(k, d[k])) - float(d[k])) < 1e-9 for k in _start_keys(base))
+
+
+def apply_design(host: str, base: World, name: str | None = None) -> None:
+    """Set the moons' physical settings to one of the designs in presets.py. Where they start (day 1) comes from the data file, not the design;
+    the starting distances are the retuned ones for that start (or a retune is asked for)."""
+    ss = st.session_state
+    name = name or ss["w_design"]
     _, liw, nin = PRESETS[name]
+    start = {m.name: m for h, ms in base.moons if h == host for m in ms}
+    saved = {(d, mn): km for d, mn, km in base.start_distances}
+    use_saved = start_matches_saved(base) and all((name, m.name) in saved for m in (liw, nin))
     for m in (liw, nin):
-        st.session_state.update({f"w_{m.name}_dia": float(m.diameter_km), f"w_{m.name}_rho": float(m.density_gcc), f"w_{m.name}_a": float(m.a_km),
-                                 f"w_{m.name}_e": float(m.ecc), f"w_{m.name}_inc": float(m.inc_deg), f"w_{m.name}_M": float(m.mean_anomaly_deg),
-                                 f"w_{m.name}_Om": float(m.asc_node_deg), f"w_{m.name}_w": float(m.arg_peri_deg)})
+        s0 = start.get(m.name, m)
+        ss.update({f"w_{m.name}_dia": float(m.diameter_km), f"w_{m.name}_rho": float(m.density_gcc),
+                   f"w_{m.name}_a": float(saved[(name, m.name)]) if use_saved else float(m.a_km),
+                   f"w_{m.name}_e": float(m.ecc), f"w_{m.name}_inc": float(m.inc_deg), f"w_{m.name}_M": float(s0.mean_anomaly_deg),
+                   f"w_{m.name}_Om": float(s0.asc_node_deg), f"w_{m.name}_w": float(s0.arg_peri_deg)})
+    if not use_saved:
+        ss["_needs_retune"] = host
+
+
+def ask_retune(host: str) -> None:
+    st.session_state["_needs_retune"] = host
 
 
 def star_editor(base: World) -> None:
@@ -133,8 +153,13 @@ def _dist(n): st.number_input("Distance from the star (AU)", 0.1, 5.0, step=0.01
 def _ecc(n): st.slider("Orbital eccentricity", 0.0, 0.5, step=0.005, key=f"w_{n}_ecc")
 def _tilt(n): st.number_input("Axial tilt (deg)", 0.0, 90.0, step=1.0, key=f"w_{n}_obl")
 def _phase(n):
-    st.slider("Position at the founding moment (deg of orbit)", 0.0, 360.0, step=1.0, key=f"w_{n}_ph",
+    st.slider("Position on day 1 (deg of orbit)", 0.0, 360.0, step=1.0, key=f"w_{n}_ph",
               help="0 puts the planet at its closest point to Aureth on the shared starting line.")
+
+
+def _axis(n):
+    st.slider("Which way the axis leans on day 1 (deg)", 0.0, 360.0, step=1.0, key=f"w_{n}_axis",
+              help="This sets the season on day 1. 0 is a winter solstice at the planet's closest approach to Aureth; 90 and 270 are equinoxes; 180 is a summer solstice at closest approach.")
 
 
 def planet_editor(p, base: World) -> None:
@@ -142,7 +167,7 @@ def planet_editor(p, base: World) -> None:
     st.button(f"Reset {n} to the data file", on_click=reset_planet, args=(n, base), key=f"reset_{n}")
     if p.placeholder_note:
         st.caption(f"Not settled: {p.placeholder_note}.")
-    _radius(n); _mass(n); _rot(n); _sid(n); _dist(n); _ecc(n); _tilt(n); _phase(n)
+    _radius(n); _mass(n); _rot(n); _sid(n); _dist(n); _ecc(n); _tilt(n); _phase(n); _axis(n)
 
 
 def orbit_editor(p, base: World) -> None:
@@ -155,10 +180,12 @@ def orbit_editor(p, base: World) -> None:
 
 
 def moon_editors(host: str, base: World) -> None:
-    st.selectbox("Moon design", list(PRESETS), key="w_design", on_change=apply_design, args=(host,),
+    st.selectbox("Moon design", list(PRESETS), key="w_design", on_change=apply_design, args=(host, base),
                  help="Design B is the settled design. Design C is an experiment: Liwaya on an eccentric orbit, so it swells and shrinks.")
     st.caption(PRESETS[st.session_state["w_design"]][0])
-    st.button("Reset the moons to this design", on_click=apply_design, args=(host,), key=f"reset_moons_{host}")
+    st.button("Reset the moons to this design", on_click=apply_design, args=(host, base), key=f"reset_moons_{host}")
+    st.button("Retune the moons' distances", on_click=ask_retune, args=(host,), key=f"retune_{host}",
+              help="Moves each moon's starting distance a little so its phase cycle comes back to 38.5 and 9.70 days from where it starts on day 1. About 15 seconds.")
     for h, ms in base.moons:
         if h != host:
             continue
@@ -174,3 +201,81 @@ def moon_editors(host: str, base: World) -> None:
                 st.slider("Starting orbital phase (deg)", 0.0, 360.0, step=1.0, key=f"w_{k}_M")
                 st.slider("Longitude of ascending node (deg)", 0.0, 360.0, step=1.0, key=f"w_{k}_Om")
                 st.slider("Argument of periapsis (deg)", 0.0, 360.0, step=1.0, key=f"w_{k}_w")
+
+
+# ------------------------------------------------------------------ year 1, day 1
+def _start_keys(base: World) -> list[str]:
+    keys = [f"w_{p.name}_{k}" for p in base.planets for k in ("ph", "axis")]
+    keys += [f"w_{m.name}_{k}" for _h, ms in base.moons for m in ms for k in ("M", "Om", "w")]
+    return keys
+
+
+def roll_start(base: World, seed: int | None = None) -> None:
+    """Draw a natural-looking day 1 from a seed (a new random one if none is given) and put it into the sidebar settings. The moons then get retuned."""
+    import random
+
+    from .start import random_start
+    ss = st.session_state
+    if seed is None:
+        seed = random.randint(0, 99999)
+    ss["w_start_seed"] = int(seed)
+    ss.update(random_start(int(seed), base))
+    ss["_needs_retune"] = "Bayurinda"
+
+
+def saved_start(base: World) -> None:
+    ss = st.session_state
+    d = defaults(base)
+    ss.update({k: d[k] for k in _start_keys(base)})
+    ss["w_start_seed"] = int(base.start_seed)
+    apply_design("Bayurinda", base)
+
+
+def save_start_cb() -> None:
+    st.session_state["_start_action"] = "save"
+
+
+@st.cache_data(show_spinner=False)
+def _retuned(system):
+    from .start import retune_distances
+    return retune_distances(system)
+
+
+def process_start_actions(base: World) -> None:
+    """Do the slow things a click asked for (retuning, saving) before the sidebar is drawn. Call this right after ensure_state."""
+    ss = st.session_state
+    host = ss.pop("_needs_retune", None)
+    if host and base.moons_of(host):
+        with st.spinner("Retuning the moons' starting distances so their phase cycles stay at 38.5 and 9.70 days (about 15 seconds)..."):
+            sysm = world_from_state(base).system(host)
+            for m, km in zip(sysm.moons, _retuned(sysm)):
+                ss[f"w_{m.name}_a"] = round(km)
+    if ss.pop("_start_action", None) == "save":
+        from .start import save_start
+        with st.spinner("Retuning the moons for each design and saving (about 30 seconds)..."):
+            w_now = world_from_state(base)
+            dists = {}
+            for design, (_blurb, liw, nin) in PRESETS.items():
+                ms = tuple(replace(m, mean_anomaly_deg=ss[f"w_{m.name}_M"], asc_node_deg=ss[f"w_{m.name}_Om"], arg_peri_deg=ss[f"w_{m.name}_w"]) for m in (liw, nin))
+                s_d = w_now.system("Bayurinda")
+                s_d = type(s_d)(s_d.planet, ms, s_d.neighbors)
+                dists[design] = _retuned(s_d)
+            save_start(int(ss["w_start_seed"]), {k: ss[k] for k in _start_keys(base)}, base, dists)
+        ss["_start_saved"] = True
+
+
+def start_editor(base: World) -> None:
+    """The Day 1 box: roll a new natural-looking start from a seed, go back to the saved one, or save the current numbers as the default."""
+    ss = st.session_state
+    st.caption("Where every planet and moon is on year 1, day 1, and which way each axis leans (the season). A seed always gives the same start. "
+               "Rolling avoids contrived ones: planets lined up, moons on top of each other, both moons full or both new. A roll retunes the moons' distances "
+               "(about 15 seconds). You can also set each number by hand in the planet and moon settings.")
+    st.number_input("Day 1 seed", 0, 999_999, step=1, key="w_start_seed", on_change=lambda: roll_start(base, int(st.session_state["w_start_seed"])),
+                    help="Type a number and press Enter to use that start.")
+    c1, c2 = st.columns(2)
+    c1.button("New random day 1", on_click=roll_start, args=(base,), key="start_roll")
+    c2.button("Back to saved", on_click=saved_start, args=(base,), key="start_back", help="Return to the day 1 written in data/aureth.yaml.")
+    st.button("Save this day 1 as the default", on_click=save_start_cb, key="start_save",
+              help="Writes the current day 1 into data/aureth.yaml (the system_start block), with the moons' distances retuned for each design. About 30 seconds.")
+    if ss.pop("_start_saved", False):
+        st.success("Saved to data/aureth.yaml.")

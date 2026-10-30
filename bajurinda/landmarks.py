@@ -20,10 +20,10 @@ def rise_offset_deg(dec_deg: float, lat_deg: float) -> float | None:
 
 
 def sun_markers(system: System, year_days_solar: int = 440, step: float = 0.25) -> dict:
-    """Solstices and equinoxes of Bayurinda's year, counted in solar days from the founding moment.
+    """Solstices and equinoxes of Bayurinda's year, counted in solar days from year 1, day 1.
 
-    The direction the spin axis tilts (relative to perihelion) is a free choice; here the founding moment is the
-    northern winter solstice and perihelion at once."""
+    The direction the spin axis tilts (relative to perihelion) is a free choice, set with the rest of the day 1 start
+    (`axis_azimuth_deg` in data/aureth.yaml)."""
     pl = system.planet
     D = pl.local_day_days
     t = np.arange(0, pl.year_days + 5, step)

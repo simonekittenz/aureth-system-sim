@@ -33,7 +33,8 @@ class Planet:
     star_mass_kg: float = 0.0
     star_luminosity_lsun: float = 1.0
     star_radius_rsun: float = 1.0
-    mean_anomaly_deg: float = 0.0       # where it is on its orbit at the founding moment (0 = closest to the star)
+    mean_anomaly_deg: float = 0.0       # where it is on its orbit on day 1 (0 = closest to the star)
+    axis_azimuth_deg: float = 0.0       # which way the axis leans on day 1, measured from the direction of closest approach (0 = a winter solstice at closest approach)
     placeholder_note: str = ""          # what, if anything, about this planet is not settled
 
     @property

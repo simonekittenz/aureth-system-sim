@@ -26,7 +26,7 @@ from bajurinda.dynamics import integrate, mean_rates, phase_ensemble, stability_
 from bajurinda.model import System, planet_warnings, system_report
 from bajurinda.presets import DEFAULT_PRESET, PRESETS
 from bajurinda.world import load_world
-from bajurinda.worldstate import ensure_state, moon_editors, planet_editor, remember, star_editor, world_from_state
+from bajurinda.worldstate import ensure_state, process_start_actions, start_editor, moon_editors, planet_editor, remember, star_editor, world_from_state
 from bajurinda.sky import (
     alignment_events, altitude_deg, crossings, tide_series,
 )
@@ -51,6 +51,7 @@ for _k, _v in {"v_pov": "Bayurinda", "v_window": 240, "v_step": 3, "v_lat": 10, 
 if ss["v_unit"] == "Bajurindan days":                 # an older name for the same choice
     ss["v_unit"] = "Local days"
 ensure_state(BASE)
+process_start_actions(BASE)
 
 with st.sidebar:
     st.title("Planet view")
@@ -63,6 +64,8 @@ with st.sidebar:
 
     with st.expander("Star (Aureth)", expanded=False):
         star_editor(BASE)
+    with st.expander("Day 1: where everything starts", expanded=False):
+        start_editor(BASE)
     with st.expander(f"{pov}: size, spin and orbit", expanded=False):
         planet_editor(base_p, BASE)
     if has_moons_base:
@@ -333,7 +336,7 @@ if has_moons:
     with T["Calendar"]:
         st.subheader("Calendar across the repeating cycle")
         st.write("Months follow the larger moon's phase cycle and weeks follow the smaller moon's, each counted in whole "
-                 "Bajurindan solar days from the founding moment (day 1). A *double* is a Liwaya phase with a Nineya phase "
+                 "Bajurindan solar days from year 1, day 1. A *double* is a Liwaya phase with a Nineya phase "
                  "of the same kind falling within the tolerance. Names and structure are placeholders.")
         names = tuple(m.name for m in system.moons)
         c1, c2, c3 = st.columns(3)
@@ -427,7 +430,7 @@ if has_moons:
             st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
         st.caption("Overlap = the two moons' discs touch or cover each other as seen from the planet's centre; seen from the "
                    "surface, Nineya shifts by up to 2.3 degrees depending on where you stand. Double-full and double-new use the "
-                   "Calendar tab's half-day tolerance. The first era is cut off at year 0 because the founding moment starts aligned.")
+                   "Calendar tab's half-day tolerance.")
 
 # ------------------------------------------------------------------ Eclipses
 if has_moons:
@@ -531,7 +534,7 @@ with T["Landmarks"]:
                                 "Sunrise (° from east)": (f"{rise_offset_deg(dec, lat):+.1f}" if rise_offset_deg(dec, lat) is not None else "never rises / sets")}
                                for n, d, dec in rows]), hide_index=True, width="stretch")
     st.caption("The seasons are not equal because the orbit is slightly oval. Which way the axis leans relative to the closest point to Aureth is not settled; "
-               "here the founding moment is a northern winter solstice and the closest approach together.")
+               "here the season on day 1 comes from the Day 1 settings in the sidebar.")
 
     if has_moons:
         st.markdown("**The moons: standstills**")
@@ -622,10 +625,9 @@ with T["Night sky"]:
              + ("Time is the **world clock**, the clock at longitude 0, and every longitude sees the same instant, so moving east or west turns the planet under the sky. "
                 if same_instant else
                 "Time is **local solar time**: the clock moves with you, so the Sun is in the same place at the same reading wherever you stand. ")
-             + "Midnight at longitude 0 is the founding moment, when the star and the three planets are in a line"
-             + (" and both moons are full overhead." if has_moons else "."))
+             + "Midnight at longitude 0 on year 1, day 1 is the starting moment, with every planet and moon where the Day 1 settings in the sidebar put it.")
 
-    def jump_founding():
+    def jump_to_day_one():
         st.session_state.update({"v_sky_year": 1, "v_sky_day": 1, "v_sky_clock": 0.0})
 
     sky_box = st.container()          # the picture goes here, above the settings, and is filled in once the settings are known
@@ -650,7 +652,7 @@ with T["Night sky"]:
     k2.number_input("Day of the year", 1, int(round(year_len)), step=1, key="v_sky_day")
     k3.slider(f"Start at time (hours after midnight; a day is {day_h:g} hours)", 0.0, float(int(2 * day_h - 1) / 2), step=0.25, key="v_sky_clock",
               help="Read as local time or as the world clock, depending on the 'Time is' choice above.")
-    k4.button("Jump to the founding moment", on_click=jump_founding)
+    k4.button("Jump to year 1, day 1", on_click=jump_to_day_one)
     p1, p2, p3 = st.columns(3)
     step_label = p1.select_slider("Time between frames", list(STEPS), key="v_sky_step")
     span_label = p2.select_slider("Play for", list(SPANS), key="v_sky_span")
@@ -889,7 +891,7 @@ with T["Night sky"]:
                         width="stretch", config={"displaylogo": False, "toImageButtonOptions": {"width": 1920, "height": 1080, "scale": 1}})
         if pick_on:
             st.caption(f"Pointer mode: a still picture of {sky.labels[0]}. Move the pointer over the sky to read its **ecliptic longitude and latitude**, "
-                       "the same coordinates the stars use in data/aureth.yaml (longitude 180 is where Aureth sits at the founding moment). "
+                       "the same coordinates the stars use in data/aureth.yaml (longitude 0 points from Aureth toward the planets' closest-approach point, so Aureth sits at longitude 180 when a planet is there). "
                        "These are positions on the sky, not on the planet's surface. Narrow the panorama width for finer pointing.")
         else:
             st.caption(f"{len(sky.clock)} frames from {sky.labels[0]} to {sky.labels[-1]}. Press Play or drag the slider under the picture. "
@@ -911,8 +913,7 @@ with T["Night sky"]:
                 f"and drift{'s' if west_one else ''} right to left. At low latitudes, with a {planet.obliquity_deg:g}° axial tilt, bodies can pass on either side of the zenith. "
                 "The dotted paths and arrows show each one's route, and the all-sky dome shows them going the same way round.")
     if ss["v_sky_year"] == 1 and ss["v_sky_day"] == 1 and ss["v_sky_clock"] == 0.0:
-        st.caption("The first frame is the founding moment: " + ("Liwaya and Nineya full, overlapping, almost overhead, with " if has_moons else "")
-                   + "the planets in the same line and Aureth directly beneath.")
+        st.caption("The first frame is year 1, day 1 at midnight, with the planets and moons where the Day 1 settings in the sidebar put them.")
 
 
 # ------------------------------------------------------------------ Stability

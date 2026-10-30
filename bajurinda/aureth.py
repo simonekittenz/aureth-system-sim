@@ -30,7 +30,7 @@ class Body:
     mass_earth: float
     radius_km: float | None
     day_hours: float | None
-    phase_deg: float = 0.0           # mean anomaly at the founding moment
+    phase_deg: float = 0.0           # mean anomaly on day 1
     peri_deg: float = 0.0
     node_deg: float = 0.0
     inc_deg: float = 0.0
@@ -89,7 +89,7 @@ def _rotation(body: Body) -> np.ndarray:
 
 
 def state(star: Star, body: Body, t_days) -> tuple[np.ndarray, np.ndarray]:
-    """Heliocentric position (AU) and velocity (AU/day) on the exact two-body orbit; t = 0 is the founding moment."""
+    """Heliocentric position (AU) and velocity (AU/day) on the exact two-body orbit; t = 0 is year 1, day 1."""
     t = np.atleast_1d(np.asarray(t_days, float))
     mu = mu_of(star, body)
     n = math.sqrt(mu / body.a_au**3)

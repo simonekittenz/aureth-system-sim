@@ -12,12 +12,25 @@ from .model import KM, Planet, System, moon_period_days, synodic_period_days
 
 def spin_axis(planet: Planet) -> np.ndarray:
     eps = math.radians(planet.obliquity_deg)
-    return np.array([math.sin(eps), 0.0, math.cos(eps)])
+    az = math.radians(planet.axis_azimuth_deg)
+    return np.array([math.sin(eps) * math.cos(az), math.sin(eps) * math.sin(az), math.cos(eps)])
+
+
+def start_direction(planet: Planet) -> np.ndarray:
+    """The direction from the star to the planet on day 1 (the planet's orbit starts closest to the star along +x, then moves on by its starting position)."""
+    M, e = math.radians(planet.mean_anomaly_deg), planet.ecc
+    E = M + e * math.sin(M)
+    for _ in range(30):
+        E -= (E - e * math.sin(E) - M) / (1 - e * math.cos(E))
+    nu = 2 * math.atan2(math.sqrt(1 + e) * math.sin(E / 2), math.sqrt(1 - e) * math.cos(E / 2))
+    return np.array([math.cos(nu), math.sin(nu), 0.0])
 
 
 def surface_normal(planet: Planet, lat_deg: float, lon_deg: float, t_days: np.ndarray) -> np.ndarray:
+    """Straight up at a point on the surface. Longitude 0 faces away from the star at t = 0, so the clock reads midnight there on day 1."""
     s = spin_axis(planet)
-    e1 = np.array([1.0, 0.0, 0.0]) - s * s[0]
+    u0 = start_direction(planet)
+    e1 = u0 - s * (s @ u0)
     e1 /= np.linalg.norm(e1)
     e2 = np.cross(s, e1)
     theta = 2 * np.pi * t_days / (planet.sidereal_rotation_hours / 24) + math.radians(lon_deg)

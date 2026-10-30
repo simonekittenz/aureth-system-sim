@@ -73,7 +73,7 @@ def sky_figure(t: np.ndarray, sky: dict, year_days: float, opp: dict[str, np.nda
                                      marker=dict(symbol="star", size=11, color=c, line=dict(width=1, color="white")),
                                      hovertemplate=f"{n} opposition<br>year %{{x:.2f}}<extra></extra>"), 1, 1)
     fig.update_yaxes(range=[0, 190], dtick=45, row=1, col=1)
-    fig.update_xaxes(title_text="Bayurindan years since the founding moment", row=2, col=1)
+    fig.update_xaxes(title_text="Bayurindan years since year 1, day 1", row=2, col=1)
     fig.update_layout(height=520, margin=dict(l=10, r=10, t=40, b=10), legend=dict(orientation="h", y=1.1))
     return fig
 
@@ -94,7 +94,7 @@ def porkchop_figure(pc: dict, year_days: float, windows: list[dict], budget: flo
                              marker=dict(symbol="x", size=11, color="#ff006e", line=dict(width=2)), name="best of each window",
                              hovertemplate="best: year %{x:.2f}, %{y:.0f} d<extra></extra>"))
     fig.update_layout(height=470, margin=dict(l=10, r=10, t=10, b=10),
-                      xaxis_title="Departure (Bayurindan years since the founding moment)", yaxis_title="Flight time (Earth days)",
+                      xaxis_title="Departure (Bayurindan years since year 1, day 1)", yaxis_title="Flight time (Earth days)",
                       legend=dict(orientation="h", y=1.08))
     return fig
 
@@ -137,7 +137,7 @@ def flight_figure(scans: dict[str, dict], year_days: float, keep_au: float, mark
         fig.add_trace(go.Scatter(x=[marks["worst_t0"] / year_days], y=[marks["worst_T"]], mode="markers", name="worst",
                                  marker=dict(symbol="x", size=13, color="#e5383b", line=dict(width=2))), 1, 1)
     fig.update_yaxes(rangemode="tozero", row=1, col=1)
-    fig.update_xaxes(title_text="Departure (Bayurindan years since the founding moment)", row=2, col=1)
+    fig.update_xaxes(title_text="Departure (Bayurindan years since year 1, day 1)", row=2, col=1)
     fig.update_layout(height=560, margin=dict(l=10, r=10, t=40, b=10), legend=dict(orientation="h", y=1.1))
     return fig
 

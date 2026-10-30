@@ -45,7 +45,7 @@ def twilight_name(sun_alt: float) -> str:
 
 def moons_at(system: System, times: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Moon positions relative to the planet (n, moons, 3), the star relative to the planet (n, 3) and the other planets
-    relative to the planet (n, planets, 3), in km, at any times (before or after the founding moment)."""
+    relative to the planet (n, planets, 3), in km, at any times (before or after year 1, day 1)."""
     times = np.asarray(times, float)
     nm, nn = len(system.moons), len(system.neighbors)
     mp = np.zeros((len(times), nm, 3))
@@ -71,7 +71,7 @@ def moons_at(system: System, times: np.ndarray) -> tuple[np.ndarray, np.ndarray,
 
 @dataclass
 class SkyData:
-    t: np.ndarray                   # Earth days since the founding moment
+    t: np.ndarray                   # Earth days since year 1, day 1
     clock: np.ndarray               # local mean solar time of day, hours
     labels: list                    # "year 3, day 120, 04:30" for each frame
     sun: dict                       # alt, az (deg), rad (deg), probe (alt, az) for nothing
@@ -101,7 +101,7 @@ def compute_sky(system: System, lat: float, lon: float, day_total: float, start_
                 span_hours: float = 19.0, step_hours: float = 0.5, same_instant: bool = False) -> SkyData:
     """The sky from (lat, lon) at a run of moments (a day is `planet.solar_day_hours` long: 19 on Bayurinda).
 
-    `day_total` counts days since the founding moment, which is midnight on day 0 at longitude 0. The run starts `start_hour`
+    `day_total` counts days since year 1, day 1, which starts at midnight at longitude 0. The run starts `start_hour`
     hours into that day and lasts `span_hours`, with one frame every `step_hours`.
 
     By default the clock is the observer's own local solar time: the same clock reading gives nearly the same sky at any

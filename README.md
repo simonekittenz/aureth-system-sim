@@ -79,7 +79,7 @@ horizon with compass points, a set of named bright stars and a Milky Way. The st
 the `sky` section of `data/aureth.yaml` and are all placeholders: rename and move them freely. A panorama or an all-sky dome, with a
 Play button that runs a time-lapse. The picture sits at the top of the tab, its height is a setting (up to 1500 px), and the
 full-screen button at its top right goes larger still. You choose the start, the time between frames (5 minutes to 10 days), how long it plays
-(an hour to four years) and the speed. The founding moment is the default view.
+(an hour to four years) and the speed. Year 1, day 1 is the default view.
 
 ### Constellation map
 
@@ -89,6 +89,16 @@ coordinates (ecliptic longitude around the edge, latitude as the rings). A searc
 thick, the rest fade, and the chart switches to the side it is on. A table lists the matches with where they sit and their brightest star.
 **Pointer coordinates** (on by default) shows the ecliptic longitude and latitude under the pointer, and the nearest named star, as you hover. A **Preview a
 star** box lets you type coordinates, see a marker on the chart, and copy the line to paste into the `stars` list in `data/aureth.yaml`. Star names are off by default.
+
+### Year 1, day 1
+
+The **Day 1** box in the sidebar (on both pages) sets where everything starts: each planet's position on its orbit, which way each axis leans (that is
+the season on day 1), and where each moon is on its orbit. The default is not aligned: it is a natural-looking start made from a **seed**, with contrived
+draws thrown away (planets in line, moons on top of each other, both moons full or both new). **New random day 1** rolls another one, **Back to saved** returns
+to the one in `data/aureth.yaml`, and **Save this day 1 as the default** writes the current numbers into the `system_start` block there. The moons are put at
+random places on their orbits and the whole moon system is turned at random, but the two moons' orbits keep their relation to each other, because that is the
+arrangement the stability tests covered. Where a moon starts also changes how its starting distance relates to its average distance (about 1%), so a roll
+retunes the distances to keep the phase cycles at 38.5 and 9.70 days (about 15 seconds); the saved start carries the retuned distances for each moon design.
 
 ### Moon designs
 
@@ -141,7 +151,7 @@ figures are placeholders.
 
 In `data/aureth.yaml`, under `sky`:
 
-- `stars`: each has a `name`, `lon` and `lat` (ecliptic coordinates; longitude 180 is where Aureth sits at the founding moment), a `mag`
+- `stars`: each has a `name`, `lon` and `lat` (ecliptic coordinates; longitude 0 points from Aureth toward the planets' closest-approach point, so Aureth sits at longitude 180 when a planet is there), a `mag`
   (smaller is brighter), a `color` and whether to show its name.
 - `faint_stars`: the `seed` and counts for the generated dim stars. The same seed always gives the same sky. The sidebar has a
   seed box, a button for a new random seed, one to go back to the saved seed, and one that writes the current seed into this file.
@@ -175,57 +185,8 @@ Tidal evolution (REBOUNDx), tidal locking timescales, precession.
   - Liwaya: 3,450 km across, about 362,900 km from Bayurinda on average (28.0 days sidereal, **38.5 Bajurindan days** per phase cycle).
   - Nineya: 1,200 km across, about 150,250 km on average (7.5 days sidereal, **9.70 Bajurindan days** per phase cycle).
   - 32 Liwaya cycles = 127 Nineya cycles = 1,232 days (2.80 years). The calendar is deliberately not tied to the solar year.
-  - Both orbits are tilted 1.5 degrees and start at a double full moon with the two moons overlapping.
+  - Both orbits are tilted 1.5 degrees. Where the moons start comes from the Day 1 settings (see above).
   - Stable over 3,000 simulated years and across random starting phases.
   - The orbital planes drift apart and realign every 52.7 Bajurindan years; overlaps are frequent for a few years around each
     realignment (about 5 a year on average).
   - Distances in the sidebar are starting (osculating) values; the Overview shows the simulated averages.
-
-## Calendar tab
-
-Lists every month (Liwaya's phase cycle) and week (Nineya's phase cycle) across the repeating cycle, with
-runs of double-full and double-new moons marked. Month and week names and structure are placeholders.
-
-## Eras tab
-
-A long-run timeline (70-300 years) of how often the two moons overlap, the angle between their orbital planes,
-and where the double-full and double-new months fall. Gold bands mark the stretches when the planes are aligned.
-
-## Night sky tab
-
-The sky from a chosen latitude, longitude and local time: Aureth, both moons with their true phases, Ashara and Tarnic, the
-horizon with compass points, a set of named bright stars and a Milky Way. The stars and the galaxy's shape come from
-the `sky` section of `data/aureth.yaml` and are all placeholders: rename and move them freely. A panorama or an all-sky dome, with a
-Play button that runs a time-lapse. You choose the start, the time between frames (5 minutes to 10 days), how long it plays
-(an hour to four years) and the speed. The founding moment is the default view.
-
-## Landmarks tab
-
-Where the Sun and each moon rise on the horizon at a chosen latitude, the moons' standstills (extreme rising points), cycles after
-which the same phase, hour, height and date return, and how long an alignment to a fixed star stays true.
-
-## Eclipses tab
-
-Solar and lunar eclipses for both moons, counted for the whole planet and for a single place, plus a table of what
-different star sizes would do to totality.
-
-## Not yet implemented
-
-Tidal evolution (REBOUNDx), tidal locking timescales, precession.
-
-## Design decisions
-
-- The 19 h day is a **solar day** (noon to noon). Sidereal rotation is therefore 18.949 h, and a year is 374 solar days or 375 rotations.
-- Liwaya is the **larger** moon and Nineya the **smaller** (per the world files).
-- Moon configuration **B** is the selected design (hypothetical, not yet canon):
-  - Liwaya: 3,450 km across, about 359,500 km from Bayurinda on average (27.6 days sidereal, **38.5 Bajurindan days** per phase cycle).
-  - Nineya: 1,200 km across, about 149,900 km on average (7.5 days sidereal, **9.70 Bajurindan days** per phase cycle).
-  - 32 Liwaya cycles = 127 Nineya cycles = 1,232 days (3.29 years). The calendar is deliberately not tied to the solar year.
-  - Both orbits are tilted 1.5 degrees and start at a double full moon with the two moons overlapping.
-  - Stable over 3,000 simulated years and across random starting phases.
-  - The orbital planes drift apart and realign every 66.4 Bajurindan years, so overlaps are frequent for a few years around
-    each realignment and rarer in between.
-  - Distances in the sidebar are starting (osculating) values; the Overview shows the simulated averages.
-- Aureth is a **G-type** star: 1.0021 solar masses (derived from the 374-day year at 0.87 AU). Its radius (0.88 solar) and
-  luminosity (0.72 solar) are a proposal for a young star: sunlight at Bayurinda is 0.95x Earth, and the Sun looks small
-  enough (0.539 degrees) that Liwaya (0.55 degrees) can fully cover it for total solar eclipses.

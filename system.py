@@ -19,7 +19,7 @@ from bajurinda.constellations import load_constellations
 from bajurinda.starfield import faint_stars, load_faint_settings, load_sky
 from bajurinda.starmap import find as find_on_map, hemisphere_of, star_map_figure
 from bajurinda.world import load_world
-from bajurinda.worldstate import ensure_state, orbit_editor, remember, star_editor, world_from_state
+from bajurinda.worldstate import ensure_state, process_start_actions, start_editor, orbit_editor, remember, star_editor, world_from_state
 from bajurinda.transfers import find_windows, hohmann, porkchop
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -27,6 +27,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 BASE = load_world()
 ss = st.session_state
 ensure_state(BASE)
+process_start_actions(BASE)
 for _k, _v in ss.get("_map_saved", {}).items():       # the star map's settings survive a visit to the other page
     if _k not in ss:
         ss[_k] = _v
@@ -38,6 +39,8 @@ with st.sidebar:
     st.caption("The same star and planets as on the Planet view page: a change made here shows there too.")
     with st.expander("Star (Aureth)"):
         star_editor(BASE)
+    with st.expander("Day 1: where everything starts"):
+        start_editor(BASE)
     for p_ in BASE.planets:
         with st.expander(p_.name + ("  (some values unsettled)" if p_.placeholder_note else "")):
             orbit_editor(p_, BASE)
@@ -65,8 +68,8 @@ def get_eph(star: Star, bodies: tuple[Body, ...], span_days: float, step: float 
 
 
 st.title("Aureth system")
-st.caption("Time is counted from the founding moment (the double full moon), when the star, Bayurinda, Ashara and Tarnic "
-           f"start in a line. Dates read 'year, day' in Bayurindan years of {BAYURINDA.year_solar_days:.0f} solar days. Orbits are flat and coplanar "
+st.caption("Time is counted from year 1, day 1, with every planet where the Day 1 settings in the sidebar put it. "
+           f"Dates read 'year, day' in Bayurindan years of {BAYURINDA.year_solar_days:.0f} solar days. Orbits are flat and coplanar "
            "(a placeholder), and Ashara's eccentricity is a placeholder. Planet positions come from one N-body simulation, the same one the Planet view uses.")
 
 TAB_NAMES = ["Orbits", "Cycles", "Sky from Bayurinda", "Constellation map", "Transfers", "Long cycles", "Stability"]
@@ -121,7 +124,7 @@ with T["Cycles"]:
         gaps = np.diff([a["t"] for a in al]) / 365.25
         if len(gaps):
             st.caption(f"{len(al)} alignments in {g_years} years; the gap between them averages {gaps.mean():.1f} Earth years "
-                       f"(shortest {gaps.min():.1f}, longest {gaps.max():.1f}). The first is the founding moment itself.")
+                       f"(shortest {gaps.min():.1f}, longest {gaps.max():.1f}).")
     else:
         st.info("No alignment that tight in this span.")
 

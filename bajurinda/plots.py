@@ -277,5 +277,5 @@ def standstill_figure(env: dict, year_days: float, major_minor: bool = True) -> 
     fig.add_hline(y=16, line=dict(color="#ffb703", dash="dot", width=1), annotation_text="the Sun at the solstices (16 deg)",
                   annotation_position="top left")
     fig.update_layout(height=340, margin=dict(l=10, r=10, t=10, b=10), legend=dict(orientation="h", y=1.12),
-                      xaxis_title="Bayurindan years since the founding moment", yaxis_title="Highest point reached each month (declination, deg)")
+                      xaxis_title="Bayurindan years since year 1, day 1", yaxis_title="Highest point reached each month (declination, deg)")
     return fig

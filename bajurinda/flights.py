@@ -12,7 +12,7 @@ AU_DAY_KMS = AU_KM / 86400.0
 
 
 def straight_flight(star: Star, origin: Body, dest: Body, t0, a_g: float, iters: int = 8, eph=None) -> dict:
-    """Constant-acceleration flip-and-burn from `origin` to `dest`, leaving at t0 (Earth days from the founding moment).
+    """Constant-acceleration flip-and-burn from `origin` to `dest`, leaving at t0 (Earth days from year 1, day 1).
 
     The ship accelerates at a_g until halfway along the line, then brakes to arrive at rest relative to the destination.
     The planets follow their exact orbits; their motion during the flight is included. The Sun's pull is ignored (it is

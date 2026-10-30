@@ -23,6 +23,8 @@ class World:
     star: Star
     planets: tuple[Planet, ...]
     moons: tuple[tuple[str, tuple[Moon, ...]], ...] = ()      # (planet name, its moons)
+    start_seed: int = 0                                         # the seed the saved day 1 was made from
+    start_distances: tuple[tuple[str, str, float], ...] = ()    # (design, moon, retuned starting distance in km) for the saved day 1
 
     @property
     def names(self) -> list[str]:
@@ -50,6 +52,7 @@ def load_world(path: Path = DATA_FILE) -> World:
     star = Star(d["star"]["name"], base.star_mass_msun, d["star"]["luminosity_lsun"], d["star"]["radius_rsun"])
     start = d.get("system_start", {})
     phases = start.get("phase_deg", {})
+    axes = start.get("axis_azimuth_deg", {})
     planets = []
     for p in d["planets"]:
         if p.get("distance_au") is None:
@@ -70,6 +73,13 @@ def load_world(path: Path = DATA_FILE) -> World:
         words = {"axial_tilt_deg": "axial tilt", "day_hours": "day length", "eccentricity": "eccentricity"}
         names = [words.get(h, str(h).replace("_", " ")) for h in holes]
         note = (", ".join(names[:-1]) + " and " + names[-1] if len(names) > 1 else (names[0] if names else "")) + (" are placeholders" if len(names) > 1 else " is a placeholder" if names else "")
-        planets.append(replace(pl, mean_anomaly_deg=float(phases.get(name, 0.0)), placeholder_note=note))
+        planets.append(replace(pl, mean_anomaly_deg=float(phases.get(name, 0.0)), axis_azimuth_deg=float(axes.get(name, 0.0)), placeholder_note=note))
     _, liw, nin = PRESETS[DEFAULT_PRESET]
-    return World(star, tuple(planets), (("Bayurinda", (liw, nin)),))
+    starts = start.get("moons", {})
+    dists = tuple((str(design), name, float(km)) for name, mv in starts.items() for design, km in mv.get("start_distance_km", {}).items())
+    mine = {name: km for design, name, km in dists if design == DEFAULT_PRESET}
+    moons = tuple(replace(m, mean_anomaly_deg=float(starts.get(m.name, {}).get("mean_anomaly_deg", m.mean_anomaly_deg)),
+                          asc_node_deg=float(starts.get(m.name, {}).get("asc_node_deg", m.asc_node_deg)),
+                          arg_peri_deg=float(starts.get(m.name, {}).get("arg_peri_deg", m.arg_peri_deg)),
+                          a_km=mine.get(m.name, m.a_km)) for m in (liw, nin))
+    return World(star, tuple(planets), (("Bayurinda", moons),), int(start.get("seed", 0)), dists)
