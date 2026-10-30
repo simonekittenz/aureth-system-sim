@@ -117,7 +117,7 @@ def star_map_figure(hemi: str, sets: list[dict], mw: MilkyWay, *, faint: tuple[n
                                  marker=dict(size=np.round(1.3 + (5.6 - fm[k]) * 0.35, 2), color="white", opacity=0.45)))
 
     # constellation lines and names
-    matches, ann = [], []
+    matches, geoms = [], []
     for si, cs in enumerate(sets):
         col = cs["color"]
         for fg in cs["figures"]:
@@ -145,10 +145,8 @@ def star_map_figure(hemi: str, sets: list[dict], mw: MilkyWay, *, faint: tuple[n
                 matches.append({"Constellation": fg["name"], "Set": cs["name"], "Centre longitude": round(lon_c), "Centre latitude": round(lat_c),
                                 "Chart": "Northern" if lat_c >= 0 else "Southern", "Stars": len({n for ln in fg["lines"] for n in ln}),
                                 "Brightest star": bright.name if bright else ""})
-            x, y, r = project(c, hemi)
-            if figure_names and float(r) <= EDGE:
-                ann.append(dict(x=float(x), y=float(y), text=f"<b>{fg['name']}</b>" if hit else fg["name"], showarrow=False,
-                                font=dict(size=16 if hit else 12, color=col if hit else ("rgba(255,255,255,0.35)" if dim else "rgba(255,255,255,0.9)"))))
+            if figure_names and xs_:
+                geoms.append(dict(name=fg["name"], hit=hit, dim=dim, col=col, xs=xs_, ys=ys_))
 
     # the bright stars
     x, y, r = project(np.array([ecl_vec(np.array(s.lon), np.array(s.lat)) for s in stars]), hemi)
@@ -163,6 +161,27 @@ def star_map_figure(hemi: str, sets: list[dict], mw: MilkyWay, *, faint: tuple[n
     if star_names:
         fig.add_trace(go.Scatter(x=x[k], y=y[k], mode="text", showlegend=False, hoverinfo="skip", textposition="bottom right",
                                  text=[s.name if s.label else "" for s in ks], textfont=dict(color="rgba(255,255,255,0.7)", size=10)))
+    if figure_names and geoms:
+        star_pts = np.column_stack([x[k], y[k]])
+        star_boxes = []
+        if star_names:                              # a named star's label sits to the lower right of its dot
+            for s_, px_, py_ in zip(ks, x[k], y[k]):
+                if s_.label:
+                    star_boxes.append((float(px_), float(px_) + 0.56 * 10 * len(s_.name) / _ppd(height) + 1.0, float(py_) - 4.5, float(py_)))
+        ring_boxes = [(-2.0, 9.0, r_ + 2 - 2.5, r_ + 2 + 2.5) for r_ in (30, 60, 90)]
+        placed = _place_labels(geoms, star_pts, star_boxes + ring_boxes, height)
+        px_l, py_l, txt, pos, colr, shade, size = [], [], [], [], [], [], []
+        for g, (ax, ay, where) in placed:
+            px_l.append(ax); py_l.append(ay); txt.append(f"<b>{g['name']}</b>" if g["hit"] else g["name"]); pos.append(where)
+            colr.append(g["col"] if g["hit"] else ("rgba(255,255,255,0.4)" if g["dim"] else "#ffffff"))
+            shade.append("rgba(10,13,28,0.5)" if g["dim"] else "rgb(10,13,28)")        # a thin dark outline, so names stay readable over lines and the glow
+            size.append(16 if g["hit"] else 12)
+        halo = 0.55
+        for dx, dy in ((halo, 0), (-halo, 0), (0, halo), (0, -halo), (halo, halo), (-halo, halo), (halo, -halo), (-halo, -halo)):
+            fig.add_trace(go.Scatter(x=[a + dx for a in px_l], y=[b + dy for b in py_l], mode="text", text=txt, textposition=pos, hoverinfo="skip", showlegend=False,
+                                     textfont=dict(color=shade, size=size)))
+        fig.add_trace(go.Scatter(x=px_l, y=py_l, mode="text", text=txt, textposition=pos, hoverinfo="skip", showlegend=False,
+                                 textfont=dict(color=colr, size=size)))
     if any(star_hit):
         fig.add_trace(go.Scatter(x=[v for v, h in zip(x[k], star_hit) if h], y=[v for v, h in zip(y[k], star_hit) if h], mode="markers+text", showlegend=False,
                                  hoverinfo="skip", marker=dict(symbol="circle-open", size=26, color="#ff4d8d", line=dict(width=3)),
@@ -184,7 +203,7 @@ def star_map_figure(hemi: str, sets: list[dict], mw: MilkyWay, *, faint: tuple[n
         fig.add_trace(go.Heatmap(x=gx, y=gy, z=np.zeros((len(gy), len(gx))), text=gt, hovertemplate="%{text}<extra></extra>", showscale=False,
                                  colorscale=[[0, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0)"]], hoverongaps=False, zsmooth=False))
     pad = 4
-    fig.update_layout(height=height, margin=dict(l=0, r=0, t=0, b=0), plot_bgcolor="rgb(10,13,28)", paper_bgcolor="rgba(0,0,0,0)", annotations=ann,
+    fig.update_layout(height=height, margin=dict(l=0, r=0, t=0, b=0), plot_bgcolor="rgb(10,13,28)", paper_bgcolor="rgba(0,0,0,0)", annotations=[],
                       xaxis=dict(range=[-LABEL_R - pad, LABEL_R + pad], visible=False, fixedrange=False),
                       yaxis=dict(range=[-LABEL_R - pad, LABEL_R + pad], visible=False, scaleanchor="x", fixedrange=False), hoverlabel=dict(font_size=13))
     return fig, matches
@@ -233,3 +252,85 @@ def _pick_grid(hemi: str, stars, step: float = 1.5):
     for q, (lo, la, rr, nr) in enumerate(zip(lon.ravel(), lat.ravel(), r.ravel(), near.ravel())):
         flat[q] = "" if rr > EDGE else f"<b>longitude {lo:.1f}°  latitude {la:+.1f}°</b><br>(ecliptic){nr}"
     return xs, xs, text
+
+
+def _ppd(height: int) -> float:
+    """Roughly how many screen pixels one degree of the chart takes."""
+    return height / (2 * (LABEL_R + 4))
+
+
+def _dense(xs: list, ys: list, step: float = 1.2) -> np.ndarray:
+    """Points along the drawn polylines (which are separated by None), at most `step` degrees apart."""
+    out, prev = [], None
+    for a, b in zip(xs, ys):
+        if a is None:
+            prev = None
+            continue
+        if prev is not None:
+            n = max(1, int(math.hypot(a - prev[0], b - prev[1]) / step))
+            for t in np.linspace(0, 1, n + 1)[1:]:
+                out.append((prev[0] + t * (a - prev[0]), prev[1] + t * (b - prev[1])))
+        else:
+            out.append((a, b))
+        prev = (a, b)
+    return np.array(out) if out else np.zeros((0, 2))
+
+
+def _box(px: float, py: float, where: str, w: float, h: float) -> tuple[float, float, float, float]:
+    vert, horiz = where.split()
+    x0 = px - w / 2 if horiz == "center" else (px - w if horiz == "left" else px)
+    y0 = py - h / 2 if vert == "middle" else (py if vert == "top" else py - h)
+    return x0, x0 + w, y0, y0 + h
+
+
+def _overlap(a, b, pad: float = 0.0) -> bool:
+    return a[0] < b[1] + pad and b[0] < a[1] + pad and a[2] < b[3] + pad and b[2] < a[3] + pad
+
+
+def _place_labels(geoms: list[dict], star_pts: np.ndarray, fixed_boxes: list, height: int) -> list:
+    """Choose a spot for each constellation's name that stays clear of every line, bright star, ring label and other name.
+
+    Candidates sit all around the figure (above, below, beside, at the corners, at several distances); each is scored by what it would cover and by
+    how far it is from its constellation. Returns [(geometry, (x, y, textposition))]."""
+    ppd = _ppd(height)
+    lines = [(g, _dense(g["xs"], g["ys"])) for g in geoms]
+    all_line_pts = np.vstack([p for _, p in lines if len(p)]) if any(len(p) for _, p in lines) else np.zeros((0, 2))
+    boxes: list = list(fixed_boxes)
+    order = sorted(lines, key=lambda gp: (not gp[0]["hit"], np.ptp(gp[1][:, 0]) * np.ptp(gp[1][:, 1]) if len(gp[1]) else 0))
+    result = []
+    for g, pts in order:
+        if not len(pts):
+            continue
+        size = 16 if g["hit"] else 12
+        w = (0.6 if g["hit"] else 0.56) * size * len(g["name"]) / ppd * 1.12 + 1.0
+        h = size * 1.35 / ppd
+        x0, x1, y0, y1 = float(pts[:, 0].min()), float(pts[:, 0].max()), float(pts[:, 1].min()), float(pts[:, 1].max())
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        cands = [(cx, cy, "middle center", 14.0)]
+        for m in (1.5, 4.0, 8.0):
+            for f in (0.5, 0.2, 0.8):
+                cands += [(x0 + f * (x1 - x0), y1 + m, "top center", 0.0), (x0 + f * (x1 - x0), y0 - m, "bottom center", 0.5),
+                          (x0 - m, y0 + f * (y1 - y0), "middle left", 0.8), (x1 + m, y0 + f * (y1 - y0), "middle right", 0.8)]
+            cands += [(x0 - m, y1 + m, "top left", 1.0), (x1 + m, y1 + m, "top right", 1.0), (x0 - m, y0 - m, "bottom left", 1.5), (x1 + m, y0 - m, "bottom right", 1.5)]
+        best, best_score = None, 1e18
+        for px, py, where, base in cands:
+            b = _box(px, py, where, w, h)
+            score = base
+            if len(all_line_pts):
+                inside = (all_line_pts[:, 0] > b[0] - 0.5) & (all_line_pts[:, 0] < b[1] + 0.5) & (all_line_pts[:, 1] > b[2] - 0.5) & (all_line_pts[:, 1] < b[3] + 0.5)
+                score += 4.0 * int(inside.sum())
+            if len(star_pts):
+                near = (star_pts[:, 0] > b[0] - 2.0) & (star_pts[:, 0] < b[1] + 2.0) & (star_pts[:, 1] > b[2] - 2.0) & (star_pts[:, 1] < b[3] + 2.0)
+                score += 8.0 * int(near.sum())
+            score += 60.0 * sum(_overlap(b, o, 0.8) for o in boxes)
+            corners = [math.hypot(cx_, cy_) for cx_ in (b[0], b[1]) for cy_ in (b[2], b[3])]
+            score += 25.0 * max(0.0, max(corners) - (EDGE - 2.0))
+            dx = max(x0 - b[1], b[0] - x1, 0.0)
+            dy = max(y0 - b[3], b[2] - y1, 0.0)
+            score += 0.35 * math.hypot(dx, dy)
+            if score < best_score:
+                best, best_score = (px, py, where, b), score
+        px, py, where, b = best
+        boxes.append(b)
+        result.append((g, (px, py, where)))
+    return result
